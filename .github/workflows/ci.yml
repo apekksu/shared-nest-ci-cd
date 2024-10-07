@@ -1,0 +1,85 @@
+name: Build and Deploy NestJS App
+
+on:
+  workflow_call:
+    inputs:
+      s3-bucket-name:
+        required: true
+        type: string
+      application-name:
+        required: true
+        type: string
+      aws-region:
+        required: false
+        type: string
+        default: us-west-2
+    secrets:
+      aws-access-key-id:
+        required: true
+      aws-secret-access-key:
+        required: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build NestJS app
+        run: npm run build
+
+      - name: Package application
+        run: |
+          zip -r ${{ inputs.application-name }}.zip .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Discover EC2 Instance ID by Tag
+        run: |
+          EC2_INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:App,Values=nest-app" "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" \
+            --output text)
+
+          if [ -z "$EC2_INSTANCE_ID" ]; then
+            echo "Error: No EC2 instance found with the specified tag."
+            exit 1
+          fi
+
+          echo "EC2_INSTANCE_ID=$EC2_INSTANCE_ID" >> $GITHUB_ENV
+
+      - name: Upload package to S3
+        run: |
+          aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}.zip
+
+      - name: Deploy application using SSM
+        run: |
+          aws ssm send-command \
+            --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters commands="aws s3 cp s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}.zip /home/ec2-user/${{ inputs.application-name }}.zip && cd /home/ec2-user && unzip -o ${{ inputs.application-name }}.zip && pm2 restart all" \
+            --timeout-seconds 600 \
+            --region ${{ inputs.aws-region }}
+
+      - name: Wait for SSM command to complete
+        run: |
+          sleep 30
+
+      - name: Verify Deployment
+        run: |
+          echo "Deployment completed."
