@@ -35,9 +35,16 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Build application
+        run: npm run build
+
       - name: Package application
         run: |
-          zip -r ${{ inputs.application-name }}.zip . -x "*.git*" "node_modules/*"
+          zip -r ${{ inputs.application-name }}.zip \
+            dist \
+            package.json \
+            package-lock.json \
+            node_modules
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -46,19 +53,20 @@ jobs:
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
           aws-region: ${{ inputs.aws-region }}
 
-      - name: Discover EC2 Instance ID by Tag
+      - name: Retrieve EC2 Instance Information
         run: |
-          EC2_INSTANCE_ID=$(aws ec2 describe-instances \
+          EC2_INFO=$(aws ec2 describe-instances \
             --filters "Name=tag:App,Values=nest-app" "Name=instance-state-name,Values=running" \
-            --query "Reservations[].Instances[].InstanceId" \
+            --query "Reservations[].Instances[].[InstanceId, PublicIpAddress]" \
             --output text)
-
-          if [ -z "$EC2_INSTANCE_ID" ]; then
-            echo "Error: No EC2 instance found with the specified tag."
-            exit 1
-          fi
+          EC2_INSTANCE_ID=$(echo "$EC2_INFO" | awk '{print $1}')
+          EC2_PUBLIC_IP=$(echo "$EC2_INFO" | awk '{print $2}')
 
           echo "EC2_INSTANCE_ID=$EC2_INSTANCE_ID" >> $GITHUB_ENV
+          echo "EC2_PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
+
+          echo "EC2 Instance ID: $EC2_INSTANCE_ID"
+          echo "EC2 Public IP: $EC2_PUBLIC_IP"
 
       - name: Upload package to S3
         run: |
@@ -70,30 +78,29 @@ jobs:
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --parameters commands="
+              set -e
 
-              cd /home/ec2-user &&
+              cd /home/ec2-user
 
-              rm -rf ${{ inputs.application-name }} &&
+              rm -rf ${{ inputs.application-name }}
 
-              mkdir ${{ inputs.application-name }} &&
-              cd ${{ inputs.application-name }} &&
+              mkdir ${{ inputs.application-name }}
+              cd ${{ inputs.application-name }}
 
-              aws s3 cp s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}.zip . &&
-              unzip -o ${{ inputs.application-name }}.zip &&
+              aws s3 cp s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}.zip .
+              unzip -o ${{ inputs.application-name }}.zip
 
-              npm install &&
+              chown -R ec2-user:ec2-user /home/ec2-user/${{ inputs.application-name }}
 
-              npm run build &&
-
-              pm2 start dist/main.js --name ${{ inputs.application-name }} --watch
+              sudo -u ec2-user pm2 start dist/main.js --name ${{ inputs.application-name }} --watch
             " \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
 
       - name: Wait for SSM command to complete
-        run: |
-          sleep 30
+        run: sleep 30
 
       - name: Verify Deployment
         run: |
           echo "Deployment completed."
+          echo "Application is accessible at http://${{ env.EC2_PUBLIC_IP }}:3000/"
