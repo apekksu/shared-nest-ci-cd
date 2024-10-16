@@ -97,39 +97,23 @@ jobs:
           aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="
-              set -e
-      
-              cd /home/ec2-user
-
-              sudo -u ec2-user pm2 stop ${{ inputs.application-name }} || true
-              sudo -u ec2-user pm2 delete ${{ inputs.application-name }} || true
-              rm -rf ${{ inputs.application-name }}
-      
-              mkdir ${{ inputs.application-name }}
-              cd ${{ inputs.application-name }}
-      
-              aws s3 cp s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/${{ inputs.application-name }}.zip .
-              unzip -o ${{ inputs.application-name }}.zip
-      
-              chown -R ec2-user:ec2-user /home/ec2-user/${{ inputs.application-name }}
-      
-
-              ESCAPED_MONGODB_URI=\"$(echo '${{ secrets.MONGODB_URI }}' | sed 's/\\$/\\\\$/g')\"
-
-              cat << EOF > .env.dev
-              MONGODB_URI=\$ESCAPED_MONGODB_URI
-              EOF
-
-              cat .env.dev
-      
-              sudo -u ec2-user pm2 start dist/src/main.js \
-                --name ${{ inputs.application-name }} \
-                --cwd /home/ec2-user/${{ inputs.application-name }} \
-                -- --port=${{ inputs.application-port }}
-            " \
+            --parameters '{"commands": [
+              "set -e",
+              "cd /home/ec2-user",
+              "sudo -u ec2-user pm2 stop '\''${{ inputs.application-name }}'\'' || true",
+              "sudo -u ec2-user pm2 delete '\''${{ inputs.application-name }}'\'' || true",
+              "rm -rf '\''${{ inputs.application-name }}'\''",
+              "mkdir '\''${{ inputs.application-name }}'\''",
+              "cd '\''${{ inputs.application-name }}'\''",
+              "aws s3 cp s3://'\''${{ inputs.s3-bucket-name }}'\''/'\''${{ inputs.application-name }}'\''/'\''${{ inputs.application-name }}'\''.zip .",
+              "unzip -o '\''${{ inputs.application-name }}'\''.zip",
+              "chown -R ec2-user:ec2-user /home/ec2-user/'\''${{ inputs.application-name }}'\''",
+              "printf 'MONGODB_URI=%s\\n' '\''${{ secrets.MONGODB_URI }}'\'' > .env.dev",
+              "sudo -u ec2-user pm2 start dist/src/main.js --name '\''${{ inputs.application-name }}'\'' --cwd /home/ec2-user/'\''${{ inputs.application-name }}'\'' -- --port=${{ inputs.application-port }}"
+            ]}' \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
+      
         
       
       
