@@ -51,7 +51,7 @@ jobs:
           ls -l dist
           ls -l dist/src
           ls -l dist/scripts
-          
+
       - name: Package application
         run: |
           zip -r ${{ inputs.application-name }}.zip \
@@ -99,25 +99,28 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --parameters commands="
               set -e
-
+      
               cd /home/ec2-user
-
+      
               rm -rf ${{ inputs.application-name }}
-
+      
               mkdir ${{ inputs.application-name }}
               cd ${{ inputs.application-name }}
-
+      
               aws s3 cp s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/${{ inputs.application-name }}.zip .
               unzip -o ${{ inputs.application-name }}.zip
-
-              export MONGODB_URI=${{ secrets.MONGODB_URI }}
-
+      
               chown -R ec2-user:ec2-user /home/ec2-user/${{ inputs.application-name }}
-
-              sudo -u ec2-user pm2 start dist/src/main.js --name ${{ inputs.application-name }} --watch -- --port=${{ inputs.application-port }}
+      
+              echo \"MONGODB_URI=${{ secrets.MONGODB_URI }}\" > .env.dev
+              cat .env.dev
+              echo ${{ secrets.MONGODB_URI }}
+      
+              sudo -u ec2-user pm2 start dist/src/main.js --name ${{ inputs.application-name }} --cwd /home/ec2-user/${{ inputs.application-name }} -- --port=${{ inputs.application-port }}
             " \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
+        
 
       - name: Wait for SSM command to complete
         run: sleep 30
