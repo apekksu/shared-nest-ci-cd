@@ -85,20 +85,18 @@ jobs:
             echo "Error: EC2_INSTANCE_ID is empty. Exiting."
             exit 1
           fi
-
-      - name: Upload package to S3
-        run: |
-          aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
-      
       - name: List local files before uploading
         run: |
           echo "Listing local files before uploading:"
           ls -alh scripts
-        
+
       - name: Upload deploy script to S3
+        working-directory: ${{ github.workflow }}
         run: |
-          aws s3 cp path/to/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
-        
+          echo "Uploading deploy.sh from shared pipeline to S3"
+          aws s3 cp ./scripts/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
+  
+            
       - name: Deploy application using SSM
         run: |
           cat > ssm-parameters.json << EOF
