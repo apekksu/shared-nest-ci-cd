@@ -114,10 +114,6 @@ jobs:
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
       
-        
-      
-      
-
       - name: Wait for SSM command to complete
         run: sleep 30
 
