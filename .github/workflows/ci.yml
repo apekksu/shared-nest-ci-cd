@@ -49,7 +49,9 @@ jobs:
           ls -l
           echo "Listing contents of the dist directory:"
           ls -l dist
-
+          ls -l dist/src
+          ls -l dist/scripts
+          
       - name: Package application
         run: |
           zip -r ${{ inputs.application-name }}.zip \
