@@ -90,16 +90,15 @@ jobs:
         run: |
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
 
-      - name: Create deploy.sh script
+      - name: Deploy application using SSM
         run: |
-          cat > deploy.sh << 'EOF'
-          #!/bin/bash
+          DEPLOY_COMMANDS=$(cat << 'EOF'
           set -e
 
-          APPLICATION_NAME="$1"
-          APPLICATION_PORT="$3"
-          MONGODB_URI="$2"
-          S3_BUCKET_NAME="${S3_BUCKET_NAME:-'${{ inputs.s3-bucket-name }}'}"
+          APPLICATION_NAME="${APPLICATION_NAME}"
+          APPLICATION_PORT="${APPLICATION_PORT}"
+          MONGODB_URI="${MONGODB_URI}"
+          S3_BUCKET_NAME="${S3_BUCKET_NAME}"
 
           cd /home/ec2-user
 
@@ -115,45 +114,35 @@ jobs:
 
           chown -R ec2-user:ec2-user "/home/ec2-user/${APPLICATION_NAME}"
 
-          sudo -u ec2-user bash -c "printf 'MONGODB_URI=%s\n' '\$MONGODB_URI' > .env.dev"
+          sudo -u ec2-user bash -c "printf 'MONGODB_URI=%s\n' '$MONGODB_URI' > .env.dev"
 
           wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ec2-user/rds-combined-ca-bundle.pem
           chown ec2-user:ec2-user /home/ec2-user/rds-combined-ca-bundle.pem
+
 
           sudo -u ec2-user NODE_EXTRA_CA_CERTS=/home/ec2-user/rds-combined-ca-bundle.pem pm2 start dist/src/main.js \
             --name "$APPLICATION_NAME" \
             --cwd "/home/ec2-user/${APPLICATION_NAME}" \
             -- --port="$APPLICATION_PORT"
           EOF
-
-      - name: Make deploy.sh executable
-        run: chmod +x deploy.sh
-
-      - name: Upload deploy.sh to S3
-        run: |
-          aws s3 cp deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/${{ inputs.application-name }}/deploy.sh
-
-      - name: Deploy application using SSM
-        run: |
-          cat > ssm-parameters.json << EOF
-          {
-            "sourceType": "S3",
-            "sourceInfo": "{ \"path\": \"s3://${{ inputs.s3-bucket-name }}/scripts/${{ inputs.application-name }}/deploy.sh\" }",
-            "commandLine": "./deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}'",
-            "executionTimeout": "3600"
-          }
-          EOF
+          )
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
-            --document-name "AWS-RunRemoteScript" \
-            --parameters file://ssm-parameters.json \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploying application ${{ inputs.application-name }}" \
+            --parameters commands="$DEPLOY_COMMANDS",executionTimeout=["3600"],workingDirectory=["/home/ec2-user"] \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
             --output text)
 
           echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
+        env:
+          APPLICATION_NAME: ${{ inputs.application-name }}
+          APPLICATION_PORT: ${{ inputs.application-port }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          S3_BUCKET_NAME: ${{ inputs.s3-bucket-name }}
 
       - name: Wait for SSM command to complete
         run: |
