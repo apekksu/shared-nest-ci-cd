@@ -43,6 +43,13 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: List Files Before Packaging
+        run: |
+          echo "Listing files in the project directory:"
+          ls -l
+          echo "Listing contents of the dist directory:"
+          ls -l dist
+
       - name: Package application
         run: |
           zip -r ${{ inputs.application-name }}.zip \
