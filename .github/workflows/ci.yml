@@ -90,6 +90,10 @@ jobs:
         run: |
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
 
+      - name: Upload deploy.sh to S3
+        run: |
+          aws s3 cp deploy.sh s3://nestjs-app-bucket-test/deploy.sh
+      
       - name: Deploy application using SSM
         run: |
           aws ssm send-command \
@@ -98,6 +102,7 @@ jobs:
             --parameters '{"sourceType": ["S3"], "sourceInfo": ["{\"path\":\"https://s3.amazonaws.com/nestjs-app-bucket-test/deploy.sh\"}"], "commandLine": ["./deploy.sh '\''${{ secrets.MONGODB_URI }}'\'' '\''${{ inputs.application-port }}'\''"], "executionTimeout": ["3600"]}' \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
+        
         
       
       - name: Wait for SSM command to complete
