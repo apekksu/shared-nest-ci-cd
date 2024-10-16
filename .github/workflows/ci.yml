@@ -84,19 +84,19 @@ jobs:
 
               cd /home/ec2-user
 
-              rm -rf ${{ inputs.application-name }}
+              rm -rf tigran-authentication-module
 
-              mkdir ${{ inputs.application-name }}
-              cd ${{ inputs.application-name }}
+              mkdir tigran-authentication-module
+              cd tigran-authentication-module
 
-              aws s3 cp s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}.zip .
-              unzip -o ${{ inputs.application-name }}.zip
+              aws s3 cp s3://nestjs-app-bucket-test/tigran-authentication-module.zip .
+              unzip -o tigran-authentication-module.zip
 
               echo 'export MONGODB_URI=\"${{ secrets.MONGODB_URI }}\"' >> /etc/environment
 
-              chown -R ec2-user:ec2-user /home/ec2-user/${{ inputs.application-name }}
+              chown -R ec2-user:ec2-user /home/ec2-user/tigran-authentication-module
 
-              sudo -u ec2-user pm2 start dist/main.js --name ${{ inputs.application-name }} --watch
+              sudo -u ec2-user pm2 start dist/main.js --name tigran-authentication-module --watch
             " \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
