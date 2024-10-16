@@ -89,10 +89,12 @@ jobs:
               mkdir tigran-authentication-module
               cd tigran-authentication-module
 
-              aws s3 cp s3://nestjs-app-bucket-test/tigran-authentication-module.zip .
+              aws s3 cp s3://${{ inputs.s3-bucket-name }}/tigran-authentication-module.zip .
               unzip -o tigran-authentication-module.zip
 
-              echo 'export MONGODB_URI=\"${{ secrets.MONGODB_URI }}\"' >> /etc/environment
+              ESCAPED_URI=\$(echo '${{ secrets.MONGODB_URI }}' | sed 's/\&/\\\\&/g')
+
+              echo \"export MONGODB_URI=\$ESCAPED_URI\" >> /etc/environment
 
               chown -R ec2-user:ec2-user /home/ec2-user/tigran-authentication-module
 
@@ -100,7 +102,7 @@ jobs:
             " \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
-
+  
       - name: Wait for SSM command to complete
         run: sleep 30
 
