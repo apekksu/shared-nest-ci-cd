@@ -45,7 +45,6 @@ jobs:
       - name: Upload deploy script to S3
         run: |
           echo "Uploading deploy.sh from shared repository to S3"
-          ls -alh
           aws s3 cp ./scripts/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
 
 
@@ -106,7 +105,6 @@ jobs:
           if [ -z "$EC2_INSTANCE_ID" ]; then
             echo "Error: EC2_INSTANCE_ID is empty. Exiting."
             exit 1
-          fi
 
       - name: Deploy application using SSM
         run: |
@@ -114,7 +112,11 @@ jobs:
           {
             "sourceType": ["S3"],
             "sourceInfo": ["{ \"path\": \"s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh\" }"],
-            "commandLine": ["./deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}'"],
+            "commandLine": [
+              "aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh",
+              "chmod +x /tmp/deploy.sh",
+              "/tmp/deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}'"
+            ],
             "executionTimeout": ["3600"]
           }
           EOF
