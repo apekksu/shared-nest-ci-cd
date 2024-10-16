@@ -39,6 +39,7 @@ jobs:
           aws-region: ${{ inputs.aws-region }}
       - name: Upload deploy script to S3
         run: |
+          ls -alh
           aws s3 cp ./scripts/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
 
 
