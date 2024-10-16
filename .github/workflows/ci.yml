@@ -9,6 +9,9 @@ on:
       application-name:
         required: true
         type: string
+      application-port:
+        required: true
+        type: number
       aws-region:
         required: false
         type: string
@@ -55,10 +58,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
           aws-region: ${{ inputs.aws-region }}
 
-      - name: Retrieve EC2 Instance Information
+      - name: Retrieve Shared EC2 Instance Information
         run: |
           EC2_INFO=$(aws ec2 describe-instances \
-            --filters "Name=tag:App,Values=${{ inputs.application-name }}" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:App,Values=shared-nest-ci-cd" "Name=instance-state-name,Values=running" \
             --query "Reservations[].Instances[].[InstanceId, PublicIpAddress]" \
             --output text)
 
@@ -95,14 +98,14 @@ jobs:
               mkdir ${{ inputs.application-name }}
               cd ${{ inputs.application-name }}
 
-              aws s3 cp s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/{{ inputs.application-name }}.zip .
+              aws s3 cp s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/${{ inputs.application-name }}.zip .
               unzip -o ${{ inputs.application-name }}.zip
 
               export MONGODB_URI=${{ secrets.MONGODB_URI }}
 
               chown -R ec2-user:ec2-user /home/ec2-user/${{ inputs.application-name }}
 
-              sudo -u ec2-user pm2 start dist/main.js --name ${{ inputs.application-name }} --watch
+              sudo -u ec2-user pm2 start dist/main.js --name ${{ inputs.application-name }} --watch -- --port=${{ inputs.application-port }}
             " \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
@@ -113,4 +116,4 @@ jobs:
       - name: Verify Deployment
         run: |
           echo "Deployment completed."
-          echo "Application is accessible at http://${{ env.EC2_PUBLIC_IP }}:3000/"
+          echo "Application is accessible at http://${{ env.EC2_PUBLIC_IP }}:${{ inputs.application-port }}/"
