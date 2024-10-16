@@ -27,7 +27,8 @@ chown -R ec2-user:ec2-user "/home/ec2-user/${APPLICATION_NAME}"
 echo "Setting MongoDB URI in .env.dev"
 sudo -u ec2-user bash -c "printf 'MONGODB_URI=%s\n' '$MONGODB_URI' > .env.dev" || exit 1
 
-wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ec2-user/rds-combined-ca-bundle.pem
+echo "Downloading RDS CA bundle"
+wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ec2-user/rds-combined-ca-bundle.pem || { echo "Failed to download CA bundle"; exit 1; }
 chown ec2-user:ec2-user /home/ec2-user/rds-combined-ca-bundle.pem
 
 ls -alh
