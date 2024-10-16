@@ -83,18 +83,13 @@ jobs:
         run: |
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
 
-      - name: Upload deploy.sh to S3
-        run: |
-          aws s3 cp scripts/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/${{ inputs.application-name }}/deploy.sh
-
       - name: Deploy application using SSM
         run: |
-
           cat > ssm-parameters.json << EOF
           {
             "sourceType": ["S3"],
-            "sourceInfo": ["{ \"path\": \"s3://${{ inputs.s3-bucket-name }}/scripts/${{ inputs.application-name }}/deploy.sh\" }"],
-            "commandLine": ["./deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}'"],
+            "sourceInfo": ["{ \"path\": \"s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh\" }"],
+            "commandLine": ["./deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}'"],
             "executionTimeout": ["3600"]
           }
           EOF
