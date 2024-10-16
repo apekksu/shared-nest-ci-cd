@@ -92,6 +92,8 @@ jobs:
       
       - name: Upload deploy script to S3
         run: |
+          echo "Listing local files before uploading:"
+          ls -alh scripts
           aws s3 cp scripts/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
         
 
