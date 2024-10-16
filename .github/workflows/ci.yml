@@ -112,7 +112,7 @@ jobs:
 
               chown -R ec2-user:ec2-user /home/ec2-user/${{ inputs.application-name }}
 
-              sudo -u ec2-user pm2 start dist/main.js --name ${{ inputs.application-name }} --watch -- --port=${{ inputs.application-port }}
+              sudo -u ec2-user pm2 start dist/src/main.js --name ${{ inputs.application-name }} --watch -- --port=${{ inputs.application-port }}
             " \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
