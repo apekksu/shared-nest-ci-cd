@@ -27,9 +27,13 @@ on:
 jobs:
   upload-shared-files:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Shared Repository
         uses: actions/checkout@v4
+        with:
+          repository: 'apekksu/shared-nest-ci-cd'
+          ref: 'main'
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -37,8 +41,10 @@ jobs:
           aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
           aws-region: ${{ inputs.aws-region }}
+
       - name: Upload deploy script to S3
         run: |
+          echo "Uploading deploy.sh from shared repository to S3"
           ls -alh
           aws s3 cp ./scripts/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
 
@@ -46,6 +52,7 @@ jobs:
   build-and-deploy:
     needs: upload-shared-files
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Application Repository
         uses: actions/checkout@v4
@@ -79,7 +86,6 @@ jobs:
       - name: Upload package to S3
         run: |
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
-
 
       - name: Retrieve Shared EC2 Instance Information
         run: |
