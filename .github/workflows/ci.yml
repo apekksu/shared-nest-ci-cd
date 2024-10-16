@@ -101,7 +101,7 @@ jobs:
               set -e
       
               cd /home/ec2-user
-      
+
               sudo -u ec2-user pm2 stop ${{ inputs.application-name }} || true
               sudo -u ec2-user pm2 delete ${{ inputs.application-name }} || true
               rm -rf ${{ inputs.application-name }}
@@ -114,13 +114,15 @@ jobs:
       
               chown -R ec2-user:ec2-user /home/ec2-user/${{ inputs.application-name }}
       
-              cat << 'EOF' > .env.dev
-              MONGODB_URI=${{ secrets.MONGODB_URI }}
+
+              ESCAPED_MONGODB_URI=\"$(echo '${{ secrets.MONGODB_URI }}' | sed 's/\\$/\\\\$/g')\"
+
+              cat << EOF > .env.dev
+              MONGODB_URI=\$ESCAPED_MONGODB_URI
               EOF
 
-              # remember to remove after
               cat .env.dev
-
+      
               sudo -u ec2-user pm2 start dist/src/main.js \
                 --name ${{ inputs.application-name }} \
                 --cwd /home/ec2-user/${{ inputs.application-name }} \
@@ -128,6 +130,7 @@ jobs:
             " \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
+        
       
       
 
