@@ -106,26 +106,13 @@ jobs:
             echo "Error: EC2_INSTANCE_ID is empty. Exiting."
             exit 1
           fi
-          
+
       - name: Deploy application using SSM
         run: |
-          cat > ssm-parameters.json << EOF
-          {
-            "sourceType": ["S3"],
-            "sourceInfo": ["{ \"path\": \"s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh\" }"],
-            "commandLine": [
-              "aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh",
-              "chmod +x /tmp/deploy.sh",
-              "/tmp/deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}'"
-            ],
-            "executionTimeout": ["3600"]
-          }
-          EOF
-
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
-            --document-name "AWS-RunRemoteScript" \
-            --parameters file://ssm-parameters.json \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh","chmod +x /tmp/deploy.sh","/tmp/deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}'"]' \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
