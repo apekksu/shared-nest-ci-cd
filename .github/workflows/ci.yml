@@ -102,6 +102,8 @@ jobs:
       
               cd /home/ec2-user
       
+              sudo -u ec2-user pm2 stop ${{ inputs.application-name }} || true
+              sudo -u ec2-user pm2 delete ${{ inputs.application-name }} || true
               rm -rf ${{ inputs.application-name }}
       
               mkdir ${{ inputs.application-name }}
@@ -112,15 +114,22 @@ jobs:
       
               chown -R ec2-user:ec2-user /home/ec2-user/${{ inputs.application-name }}
       
-              echo \"MONGODB_URI=${{ secrets.MONGODB_URI }}\" > .env.dev
+              cat << 'EOF' > .env.dev
+              MONGODB_URI=${{ secrets.MONGODB_URI }}
+              EOF
+
+              # remember to remove after
               cat .env.dev
-              echo ${{ secrets.MONGODB_URI }}
-      
-              sudo -u ec2-user pm2 start dist/src/main.js --name ${{ inputs.application-name }} --cwd /home/ec2-user/${{ inputs.application-name }} -- --port=${{ inputs.application-port }}
+
+              sudo -u ec2-user pm2 start dist/src/main.js \
+                --name ${{ inputs.application-name }} \
+                --cwd /home/ec2-user/${{ inputs.application-name }} \
+                -- --port=${{ inputs.application-port }}
             " \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }}
-        
+      
+      
 
       - name: Wait for SSM command to complete
         run: sleep 30
