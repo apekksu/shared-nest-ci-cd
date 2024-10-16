@@ -61,14 +61,24 @@ jobs:
             --filters "Name=tag:App,Values=${{ inputs.application-name }}" "Name=instance-state-name,Values=running" \
             --query "Reservations[].Instances[].[InstanceId, PublicIpAddress]" \
             --output text)
+
           EC2_INSTANCE_ID=$(echo "$EC2_INFO" | awk '{print $1}')
           EC2_PUBLIC_IP=$(echo "$EC2_INFO" | awk '{print $2}')
 
+          # Debugging Output
+          echo "EC2 Instance ID: $EC2_INSTANCE_ID"
+          echo "EC2 Public IP: $EC2_PUBLIC_IP"
+
+          # Store them in the GitHub environment
           echo "EC2_INSTANCE_ID=$EC2_INSTANCE_ID" >> $GITHUB_ENV
           echo "EC2_PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
 
-          echo "EC2 Instance ID: $EC2_INSTANCE_ID"
-          echo "EC2 Public IP: $EC2_PUBLIC_IP"
+          # Check if EC2 Instance ID is correctly retrieved
+          if [ -z "$EC2_INSTANCE_ID" ]; then
+            echo "Error: EC2_INSTANCE_ID is empty. Exiting."
+            exit 1
+          fi
+
 
       - name: Upload package to S3
         run: |
