@@ -90,13 +90,15 @@ jobs:
         run: |
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
       
-      - name: Upload deploy script to S3
+      - name: List local files before uploading
         run: |
           echo "Listing local files before uploading:"
           ls -alh scripts
-          aws s3 cp scripts/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
         
-
+      - name: Upload deploy script to S3
+        run: |
+          aws s3 cp path/to/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
+        
       - name: Deploy application using SSM
         run: |
           cat > ssm-parameters.json << EOF
