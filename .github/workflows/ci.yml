@@ -90,23 +90,75 @@ jobs:
         run: |
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
 
+      - name: Create deploy.sh script
+        run: |
+          cat > deploy.sh << 'EOF'
+          #!/bin/bash
+          set -e
+
+          APPLICATION_NAME="$1"
+          APPLICATION_PORT="$3"
+          MONGODB_URI="$2"
+          S3_BUCKET_NAME="${S3_BUCKET_NAME:-'${{ inputs.s3-bucket-name }}'}"
+
+          cd /home/ec2-user
+          sudo -u ec2-user pm2 stop "$APPLICATION_NAME" || true
+          sudo -u ec2-user pm2 delete "$APPLICATION_NAME" || true
+          rm -rf "$APPLICATION_NAME"
+
+          mkdir "$APPLICATION_NAME"
+          cd "$APPLICATION_NAME"
+
+          aws s3 cp "s3://${S3_BUCKET_NAME}/${APPLICATION_NAME}/${APPLICATION_NAME}.zip" .
+          unzip -o "${APPLICATION_NAME}.zip"
+
+          chown -R ec2-user:ec2-user "/home/ec2-user/${APPLICATION_NAME}"
+
+          sudo -u ec2-user bash -c "printf 'MONGODB_URI=%s\n' '\$MONGODB_URI' > .env.dev"
+
+          wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ec2-user/rds-combined-ca-bundle.pem
+          chown ec2-user:ec2-user /home/ec2-user/rds-combined-ca-bundle.pem
+          sudo -u ec2-user NODE_EXTRA_CA_CERTS=/home/ec2-user/rds-combined-ca-bundle.pem pm2 start dist/src/main.js \
+            --name "$APPLICATION_NAME" \
+            --cwd "/home/ec2-user/${APPLICATION_NAME}" \
+            -- --port="$APPLICATION_PORT"
+          EOF
+
+      - name: Make deploy.sh executable
+        run: chmod +x deploy.sh
+
       - name: Upload deploy.sh to S3
         run: |
-          aws s3 cp deploy.sh s3://nestjs-app-bucket-test/deploy.sh
-      
+          aws s3 cp deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/${{ inputs.application-name }}/deploy.sh
+
       - name: Deploy application using SSM
         run: |
-          aws ssm send-command \
+          cat > ssm-parameters.json << EOF
+          {
+            "sourceType": ["S3"],
+            "sourceInfo": ["{\\\"path\\\":\\\"s3://${{ inputs.s3-bucket-name }}/scripts/${{ inputs.application-name }}/deploy.sh\\\"}"],
+            "commandLine": ["./deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}'"],
+            "executionTimeout": ["3600"]
+          }
+          EOF
+
+          COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunRemoteScript" \
-            --parameters '{"sourceType": ["S3"], "sourceInfo": ["{\"path\":\"https://s3.amazonaws.com/nestjs-app-bucket-test/deploy.sh\"}"], "commandLine": ["./deploy.sh '\''${{ secrets.MONGODB_URI }}'\'' '\''${{ inputs.application-port }}'\''"], "executionTimeout": ["3600"]}' \
+            --parameters file://ssm-parameters.json \
             --timeout-seconds 600 \
-            --region ${{ inputs.aws-region }}
-        
-        
-      
+            --region ${{ inputs.aws-region }} \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
+
       - name: Wait for SSM command to complete
-        run: sleep 30
+        run: |
+          aws ssm wait command-executed \
+            --command-id "${{ env.COMMAND_ID }}" \
+            --instance-id "${{ env.EC2_INSTANCE_ID }}" \
+            --region ${{ inputs.aws-region }}
 
       - name: Verify Deployment
         run: |
