@@ -5,6 +5,8 @@ APPLICATION_NAME="$1"
 MONGODB_URI="$2"
 APPLICATION_PORT="$3"
 S3_BUCKET_NAME="$4"
+MONGODB_TYPE="$5"
+DOCKER_MONGO_PORT="$6"
 
 cd /home/ubuntu
 
@@ -24,12 +26,18 @@ unzip -o "${APPLICATION_NAME}.zip" || exit 1
 
 chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 
-echo "Setting MongoDB URI in .env.dev"
-sudo -u ubuntu bash -c "printf 'MONGODB_URI=%s\n' '$MONGODB_URI' > .env.dev" || exit 1
+if [ "$MONGODB_TYPE" = "docker" ]; then
+  echo "Setting up Docker MongoDB on port $DOCKER_MONGO_PORT"
+  docker run -d --name mongodb-${APPLICATION_NAME} --restart always -p "$DOCKER_MONGO_PORT":27017 mongo:latest  || exit 1
+  sudo -u ubuntu bash -c "printf 'MONGODB_URI=mongodb://localhost:%s/mydatabase\n' '$DOCKER_MONGO_PORT' > .env.dev" || exit 1
+else
+  echo "Setting MongoDB URI in .env.dev for cluster"
+  sudo -u ubuntu bash -c "printf 'MONGODB_URI=%s\n' '$MONGODB_URI' > .env.dev" || exit 1
 
-echo "Downloading RDS CA bundle"
-wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ubuntu/rds-combined-ca-bundle.pem || { echo "Failed to download CA bundle"; exit 1; }
-chown ubuntu:ubuntu /home/ubuntu/rds-combined-ca-bundle.pem
+  echo "Downloading RDS CA bundle"
+  wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ubuntu/rds-combined-ca-bundle.pem || { echo "Failed to download CA bundle"; exit 1; }
+  chown ubuntu:ubuntu /home/ubuntu/rds-combined-ca-bundle.pem
+fi
 
 ls -alh
 
