@@ -30,7 +30,7 @@ on:
       aws-secret-access-key:
         required: true
       MONGODB_URI:
-        required: true  # Used for mongodb option
+        required: false  # user for cluster option
 
 jobs:
   upload-shared-files:
@@ -117,10 +117,18 @@ jobs:
 
       - name: Deploy application using SSM
         run: |
+          if [ "${{ inputs.mongodb-type }}" == "docker" ]; then
+            echo "Deploying with Docker MongoDB"
+            MONGODB_URI=""
+          else
+            echo "Deploying with Cluster MongoDB"
+            MONGODB_URI="${{ secrets.MONGODB_URI }}"
+          fi
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh\",\"chmod +x /tmp/deploy.sh\",\"/tmp/deploy.sh '${{ inputs.application-name }}' '${{ secrets.MONGODB_URI }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.mongodb-type }}' '${{ inputs.docker-mongo-port }}'\"]" \
+            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh\",\"chmod +x /tmp/deploy.sh\",\"/tmp/deploy.sh '${{ inputs.application-name }}' '$MONGODB_URI' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.mongodb-type }}' '${{ inputs.docker-mongo-port }}'\"]" \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
