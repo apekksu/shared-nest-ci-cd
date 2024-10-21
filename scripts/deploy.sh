@@ -27,7 +27,7 @@ unzip -o "${APPLICATION_NAME}.zip" || exit 1
 chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 
 echo "Updating port in main.ts to $APPLICATION_PORT"
-sed -i "s/await app.listen(3000);/await app.listen($APPLICATION_PORT);/" /src/main.js || { echo "Failed to update port in main.ts"; exit 1; }
+sed -i "s/await app.listen(3000);/await app.listen($APPLICATION_PORT);/" dist/src/main.js || { echo "Failed to update port in main.ts"; exit 1; }
 
 if [ "$MONGODB_TYPE" = "docker" ]; then
   echo "Setting up Docker MongoDB on port $DOCKER_MONGO_PORT"
