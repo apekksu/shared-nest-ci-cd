@@ -44,7 +44,7 @@ jobs:
 Secrets above are required for the pipeline to authenticate with AWS and are set on organization level secrets. Ask Tigran/Aram to check if there are issues with credentials.
 
 
-### ` Shared pipeline performs the following tasks:`
+### `Shared pipeline performs the following tasks:`
 
 The pipeline checks out your repository, installs dependencies, and builds the application.
 The built application is zipped and uploaded to an S3 bucket.
@@ -63,7 +63,7 @@ Specify a different port for each app (e.g., 27018 for the second app, 27019 for
 e.g. **27018** and **3018**
 The pipeline will automatically spin up a Dockerized MongoDB container for the application on the specified port.
 
-### ` Example Repo`
+### `Example Repo`
 [Authentication Module](https://github.com/apekksu/authentication-module).
 
 The EC2 instance used for deployment is automatically configured to start PM2-managed processes on boot, ensuring that the application runs automatically after ec2 instance restart.
