@@ -1,4 +1,4 @@
-name: Shared CI/CD for NestJS
+name: Shared CI/CD for Next.js
 
 on:
   workflow_call:
@@ -16,21 +16,11 @@ on:
         required: false
         type: string
         default: us-west-2
-      mongodb-type:
-        required: true
-        type: string
-        default: "cluster"  # cluster or docker
-      docker-mongo-port:
-        required: false
-        type: number
-        default: 27017  # Only required if mongodb-type is "docker"
     secrets:
       aws-access-key-id:
         required: true
       aws-secret-access-key:
         required: true
-      MONGODB_URI:
-        required: false  # user for cluster option
 
 jobs:
   upload-shared-files:
@@ -40,7 +30,7 @@ jobs:
       - name: Checkout Shared Repository
         uses: actions/checkout@v4
         with:
-          repository: 'apekksu/shared-nest-ci-cd'
+          repository: 'apekksu/shared-next-ci-cd'
           ref: 'main'
 
       - name: Configure AWS credentials
@@ -54,7 +44,6 @@ jobs:
         run: |
           echo "Uploading deploy.sh from shared repository to S3"
           aws s3 cp ./scripts/deploy.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh
-
 
   build-and-deploy:
     needs: upload-shared-files
@@ -85,10 +74,9 @@ jobs:
       - name: Package application
         run: |
           zip -r ${{ inputs.application-name }}.zip \
-            dist \
+            .next \
             package.json \
-            package-lock.json \
-            node_modules
+            package-lock.json
 
       - name: Upload package to S3
         run: |
@@ -97,7 +85,7 @@ jobs:
       - name: Retrieve Shared EC2 Instance Information
         run: |
           EC2_INFO=$(aws ec2 describe-instances \
-            --filters "Name=tag:App,Values=shared-nest-ci-cd" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:App,Values=shared-next-ci-cd" "Name=instance-state-name,Values=running" \
             --query "Reservations[].Instances[].[InstanceId, PublicIpAddress]" \
             --output text)
 
@@ -117,18 +105,10 @@ jobs:
 
       - name: Deploy application using SSM
         run: |
-          if [ "${{ inputs.mongodb-type }}" == "docker" ]; then
-            echo "Deploying with Docker MongoDB"
-            MONGODB_URI=""
-          else
-            echo "Deploying with Cluster MongoDB"
-            MONGODB_URI="${{ secrets.MONGODB_URI }}"
-          fi
-
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh\",\"chmod +x /tmp/deploy.sh\",\"/tmp/deploy.sh '${{ inputs.application-name }}' '$MONGODB_URI' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.mongodb-type }}' '${{ inputs.docker-mongo-port }}'\"]" \
+            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh\",\"chmod +x /tmp/deploy.sh\",\"/tmp/deploy.sh '${{ inputs.application-name }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}'\"]" \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
