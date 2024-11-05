@@ -23,11 +23,8 @@ if pm2 describe "$PROCESS_NAME" > /dev/null; then
   echo "Stopping and deleting existing PM2 process: $PROCESS_NAME"
   sudo -u ubuntu pm2 stop "$PROCESS_NAME"
   sudo -u ubuntu pm2 delete "$PROCESS_NAME"
-else
-  echo "No existing PM2 process named $PROCESS_NAME found, skipping stop/delete"
 fi
 
-echo "Handling application directory: $APPLICATION_NAME"
 if [ -d "$APPLICATION_NAME" ]; then
   echo "Directory $APPLICATION_NAME already exists. Removing it."
   rm -rf "$APPLICATION_NAME"
@@ -43,7 +40,7 @@ fi
 echo "Application package downloaded successfully."
 
 echo "Unzipping application package..."
-if ! unzip -o "${APPLICATION_NAME}.zip"; then
+if ! unzip -o "${APPLICATION_NAME}.zip" > /dev/null; then
   echo "Failed to unzip application package"
   exit 1
 fi
@@ -54,8 +51,7 @@ chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 echo "Fetching secrets from AWS Secrets Manager"
 SECRET_VALUES=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
 
-echo "$SECRET_VALUES" | jq -r 'to_entries | .[] | "export \(.key)=\(.value)"' > /home/ubuntu/${APPLICATION_NAME}/.env.dev
-source /home/ubuntu/${APPLICATION_NAME}/.env.dev
+eval $(echo "$SECRET_VALUES" | jq -r 'to_entries | .[] | "export \(.key)=\(.value)"')
 
 if [[ ! -f "dist/main.js" ]]; then
   echo "Error: dist/main.js not found"
