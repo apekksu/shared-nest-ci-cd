@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex 
+set -ex
 
 export HOME=/home/ubuntu
 APPLICATION_NAME="$1"
@@ -9,6 +9,7 @@ MYSQL_DB_HOST="$4"
 MYSQL_DB_PORT="$5"
 MYSQL_DB_USER="$6"
 MYSQL_DB_PASSWORD="$7"
+SECRET_NAME="$8"
 
 PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
@@ -33,7 +34,6 @@ if [ -d "$APPLICATION_NAME" ]; then
 fi
 mkdir "$APPLICATION_NAME"
 cd "$APPLICATION_NAME"
-echo "Application directory $APPLICATION_NAME is ready."
 
 echo "Downloading application package from S3 bucket: $S3_BUCKET_NAME"
 if ! aws s3 cp "s3://${S3_BUCKET_NAME}/${APPLICATION_NAME}/${APPLICATION_NAME}.zip" .; then
@@ -51,9 +51,11 @@ echo "Application package unzipped successfully."
 
 chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 
-echo "Setting MySQL RDS connection details in .env.dev"
-sudo -u ubuntu bash -c "printf 'DATABASE_HOST=%s\nDATABASE_PORT=%s\nDATABASE_USER=%s\nDATABASE_PASSWORD=%s\n' \
-'$MYSQL_DB_HOST' '$MYSQL_DB_PORT' '$MYSQL_DB_USER' '$MYSQL_DB_PASSWORD' > .env.dev" || exit 1
+echo "Fetching secrets from AWS Secrets Manager"
+SECRET_VALUES=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
+
+echo "$SECRET_VALUES" | jq -r 'to_entries | .[] | "export \(.key)=\(.value)"' > /home/ubuntu/${APPLICATION_NAME}/.env.dev
+source /home/ubuntu/${APPLICATION_NAME}/.env.dev
 
 if [[ ! -f "dist/main.js" ]]; then
   echo "Error: dist/main.js not found"
