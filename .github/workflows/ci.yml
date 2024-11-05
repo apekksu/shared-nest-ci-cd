@@ -1,4 +1,4 @@
-name: Shared CI/CD for NestJS
+name: Shared CI/CD for NestJS with MySQL or MongoDB
 
 on:
   workflow_call:
@@ -16,21 +16,37 @@ on:
         required: false
         type: string
         default: 'eu-central-1'
-      mongodb-type:
+      database-type:
         required: true
+        type: string
+        default: "mysql"  # mysql or mongo
+      mongodb-type:
+        required: false
         type: string
         default: "cluster"  # cluster or docker
       docker-mongo-port:
         required: false
         type: number
         default: 27017  # Only required if mongodb-type is "docker"
+      mysql-db-host:
+        required: false
+        type: string
+      mysql-db-port:
+        required: false
+        type: number
+      mysql-db-user:
+        required: false
+        type: string
+      mysql-db-password:
+        required: false
+        type: string
     secrets:
       aws-access-key-id:
         required: true
       aws-secret-access-key:
         required: true
       MONGODB_URI:
-        required: false  # user for cluster option
+        required: false  # used for MongoDB cluster option
 
 jobs:
   upload-shared-files:
@@ -54,7 +70,6 @@ jobs:
         run: |
           echo "Uploading deploy-nest.sh from shared repository to S3"
           aws s3 cp ./scripts/deploy-nest.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh
-
 
   build-and-deploy:
     needs: upload-shared-files
@@ -117,18 +132,16 @@ jobs:
 
       - name: Deploy application using SSM
         run: |
-          if [ "${{ inputs.mongodb-type }}" == "docker" ]; then
-            echo "Deploying with Docker MongoDB"
+          if [ "${{ inputs.database-type }}" == "mongo" ] && [ "${{ inputs.mongodb-type }}" == "docker" ]; then
             MONGODB_URI=""
           else
-            echo "Deploying with Cluster MongoDB"
             MONGODB_URI="${{ secrets.MONGODB_URI }}"
           fi
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh\",\"chmod +x /tmp/deploy.sh\",\"/tmp/deploy.sh '${{ inputs.application-name }}' '$MONGODB_URI' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.mongodb-type }}' '${{ inputs.docker-mongo-port }}'\"]" \
+            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh\",\"chmod +x /tmp/deploy.sh\",\"/tmp/deploy.sh '${{ inputs.application-name }}' '$MONGODB_URI' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.database-type }}' '${{ inputs.mongodb-type }}' '${{ inputs.mysql-db-host }}' '${{ inputs.mysql-db-port }}' '${{ inputs.mysql-db-user }}' '${{ inputs.mysql-db-password }}' '${{ inputs.docker-mongo-port }}'\"]" \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
