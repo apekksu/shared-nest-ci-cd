@@ -1,5 +1,5 @@
 #!/bin/bash
-# Version 10:28
+# Version 10:33
 set -e
 
 APPLICATION_NAME="$1"
@@ -82,6 +82,7 @@ if [[ ! -f "dist/src/main.js" ]]; then
   echo "Error: dist/src/main.js not found"
   exit 1
 fi
+
 
 echo "Starting application using PM2"
 if ! sudo -u ubuntu pm2 start dist/src/main.js \
