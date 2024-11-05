@@ -13,10 +13,12 @@ MYSQL_DB_USER="$9"
 MYSQL_DB_PASSWORD="${10}"
 DOCKER_MONGO_PORT="${11}"
 
+PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
+
 cd /home/ubuntu
 
-sudo -u ubuntu pm2 stop "$APPLICATION_NAME" || echo "Failed to stop $APPLICATION_NAME, it may not be running"
-sudo -u ubuntu pm2 delete "$APPLICATION_NAME" || echo "Failed to delete $APPLICATION_NAME, it may not be running"
+sudo -u ubuntu pm2 stop "$PROCESS_NAME" || echo "Failed to stop $PROCESS_NAME, it may not be running"
+sudo -u ubuntu pm2 delete "$PROCESS_NAME" || echo "Failed to delete $PROCESS_NAME, it may not be running"
 
 rm -rf "$APPLICATION_NAME"
 
@@ -31,8 +33,13 @@ unzip -o "${APPLICATION_NAME}.zip" || exit 1
 
 chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 
-echo "Updating port in main.ts to $APPLICATION_PORT"
-sed -i "s/await app.listen(3000);/await app.listen($APPLICATION_PORT);/" dist/src/main.js || { echo "Failed to update port in main.js"; exit 1; }
+if [ "$DATABASE_TYPE" = "mongo" ]; then
+  echo "Updating port in main.js to $APPLICATION_PORT for MongoDB app"
+  sed -i "s/await app.listen(3000);/await app.listen($APPLICATION_PORT);/" dist/src/main.js || {
+    echo "Failed to update port in main.js"
+    exit 1
+  }
+fi
 
 if [ "$DATABASE_TYPE" = "mongo" ]; then
   if [ "$MONGODB_TYPE" = "docker" ]; then
@@ -49,12 +56,16 @@ if [ "$DATABASE_TYPE" = "mongo" ]; then
     sudo -u ubuntu bash -c "printf 'MONGODB_URI=%s\n' '$MONGODB_URI' > .env.dev" || exit 1
 
     echo "Downloading RDS CA bundle"
-    wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ubuntu/rds-combined-ca-bundle.pem || { echo "Failed to download CA bundle"; exit 1; }
+    wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ubuntu/rds-combined-ca-bundle.pem || {
+      echo "Failed to download CA bundle"
+      exit 1
+    }
     chown ubuntu:ubuntu /home/ubuntu/rds-combined-ca-bundle.pem
   fi
 elif [ "$DATABASE_TYPE" = "mysql" ]; then
   echo "Setting MySQL RDS connection details in .env.dev"
-  sudo -u ubuntu bash -c "printf 'DATABASE_HOST=%s\nDATABASE_PORT=%s\nDATABASE_USER=%s\nDATABASE_PASSWORD=%s\n' '$MYSQL_DB_HOST' '$MYSQL_DB_PORT' '$MYSQL_DB_USER' '$MYSQL_DB_PASSWORD' > .env.dev" || exit 1
+  sudo -u ubuntu bash -c "printf 'DATABASE_HOST=%s\nDATABASE_PORT=%s\nDATABASE_USER=%s\nDATABASE_PASSWORD=%s\n' \
+  '$MYSQL_DB_HOST' '$MYSQL_DB_PORT' '$MYSQL_DB_USER' '$MYSQL_DB_PASSWORD' > .env.dev" || exit 1
 fi
 
 if [[ ! -f "dist/src/main.js" ]]; then
@@ -64,6 +75,6 @@ fi
 
 echo "Starting application using PM2"
 sudo -u ubuntu pm2 start dist/src/main.js \
-  --name "$APPLICATION_NAME-$APPLICATION_PORT" \
+  --name "$PROCESS_NAME" \
   --cwd "/home/ubuntu/${APPLICATION_NAME}" \
   -- --port="$APPLICATION_PORT" || exit 1
