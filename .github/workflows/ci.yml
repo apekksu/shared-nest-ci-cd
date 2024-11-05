@@ -34,12 +34,6 @@ on:
       mysql-db-port:
         required: false
         type: number
-      mysql-db-user:
-        required: false
-        type: string
-      mysql-db-password:
-        required: false
-        type: string
     secrets:
       aws-access-key-id:
         required: true
@@ -47,6 +41,11 @@ on:
         required: true
       MONGODB_URI:
         required: false  # used for MongoDB cluster option
+      mysql-db-user:
+        required: false
+      mysql-db-password:
+        required: false
+
 
 jobs:
   upload-shared-files:
@@ -138,8 +137,8 @@ jobs:
             MONGODB_URI="${{ secrets.MONGODB_URI }}"
           fi
       
-          MYSQL_USER="${{ inputs.mysql-db-user }}"
-          MYSQL_PASSWORD="${{ inputs.mysql-db-password }}"
+          MYSQL_USER="${{ secrets.mysql-db-user }}"
+          MYSQL_PASSWORD="${{ secrets.mysql-db-password }}"
       
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
