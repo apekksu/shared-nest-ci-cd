@@ -65,4 +65,5 @@ fi
 echo "Starting application using PM2"
 sudo -u ubuntu pm2 start dist/src/main.js \
   --name "$APPLICATION_NAME-$APPLICATION_PORT" \
-  --cwd "/home/ubuntu/${APPLICATION_NAME
+  --cwd "/home/ubuntu/${APPLICATION_NAME}" \
+  -- --port="$APPLICATION_PORT" || exit 1
