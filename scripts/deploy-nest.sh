@@ -1,5 +1,5 @@
 #!/bin/bash
-# Version 10:33
+# Version 11:26
 set -e
 
 export HOME=/home/ubuntu
@@ -17,30 +17,32 @@ DOCKER_MONGO_PORT="${11}"
 
 PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
+echo "Starting deployment script for $APPLICATION_NAME..."
+
 cd /home/ubuntu
 
-# if pm2 describe "$PROCESS_NAME" > /dev/null; then
-#   sudo -u ubuntu pm2 stop "$PROCESS_NAME"
-#   sudo -u ubuntu pm2 delete "$PROCESS_NAME"
-# else
-#   echo "No existing PM2 process named $PROCESS_NAME found, skipping stop/delete"
-# fi
-
-rm -rf "$APPLICATION_NAME"
+echo "Handling application directory: $APPLICATION_NAME"
+if [ -d "$APPLICATION_NAME" ]; then
+  echo "Directory $APPLICATION_NAME already exists. Removing it."
+  rm -rf "$APPLICATION_NAME"
+fi
 mkdir "$APPLICATION_NAME"
 cd "$APPLICATION_NAME"
+echo "Application directory $APPLICATION_NAME is ready."
 
-echo "Downloading application package from S3"
+echo "Downloading application package from S3 bucket: $S3_BUCKET_NAME"
 if ! aws s3 cp "s3://${S3_BUCKET_NAME}/${APPLICATION_NAME}/${APPLICATION_NAME}.zip" .; then
   echo "Failed to download application package from S3"
   exit 1
 fi
+echo "Application package downloaded successfully."
 
-echo "Unzipping application package"
+echo "Unzipping application package..."
 if ! unzip -o "${APPLICATION_NAME}.zip"; then
   echo "Failed to unzip application package"
   exit 1
 fi
+echo "Application package unzipped successfully."
 
 chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 
@@ -60,7 +62,9 @@ if [ "$DATABASE_TYPE" = "mongo" ]; then
       echo "Failed to start Docker MongoDB"
       exit 1
     fi
+    echo "Docker MongoDB started successfully."
 
+    echo "Setting up MongoDB URI in .env.dev"
     sudo -u ubuntu bash -c "printf 'MONGODB_URI=mongodb://localhost:%s/mydatabase\n' '$DOCKER_MONGO_PORT' > .env.dev" || exit 1
   else
     echo "Setting MongoDB URI in .env.dev for cluster"
@@ -73,7 +77,9 @@ if [ "$DATABASE_TYPE" = "mongo" ]; then
     fi
     chown ubuntu:ubuntu /home/ubuntu/rds-combined-ca-bundle.pem
   fi
-elif [ "$DATABASE_TYPE" = "mysql" ]; then
+fi
+
+if [ "$DATABASE_TYPE" = "mysql" ]; then
   echo "Setting MySQL RDS connection details in .env.dev"
   sudo -u ubuntu bash -c "printf 'DATABASE_HOST=%s\nDATABASE_PORT=%s\nDATABASE_USER=%s\nDATABASE_PASSWORD=%s\n' \
   '$MYSQL_DB_HOST' '$MYSQL_DB_PORT' '$MYSQL_DB_USER' '$MYSQL_DB_PASSWORD' > .env.dev" || exit 1
@@ -84,7 +90,6 @@ if [[ ! -f "dist/src/main.js" ]]; then
   exit 1
 fi
 
-
 echo "Starting application using PM2"
 if ! sudo -u ubuntu pm2 start dist/src/main.js \
   --name "$PROCESS_NAME" \
@@ -93,3 +98,5 @@ if ! sudo -u ubuntu pm2 start dist/src/main.js \
   echo "Failed to start application using PM2"
   exit 1
 fi
+
+echo "Deployment completed successfully!"
