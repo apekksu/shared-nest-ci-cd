@@ -1,6 +1,6 @@
 #!/bin/bash
-# Version 11:26
-set -e
+# Version 10:33
+set -ex 
 
 export HOME=/home/ubuntu
 APPLICATION_NAME="$1"
@@ -17,9 +17,19 @@ DOCKER_MONGO_PORT="${11}"
 
 PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
+exec > >(tee -a /var/log/deploy_script.log) 2>&1
+
 echo "Starting deployment script for $APPLICATION_NAME..."
 
 cd /home/ubuntu
+
+if pm2 describe "$PROCESS_NAME" > /dev/null; then
+  echo "Stopping and deleting existing PM2 process: $PROCESS_NAME"
+  sudo -u ubuntu pm2 stop "$PROCESS_NAME"
+  sudo -u ubuntu pm2 delete "$PROCESS_NAME"
+else
+  echo "No existing PM2 process named $PROCESS_NAME found, skipping stop/delete"
+fi
 
 echo "Handling application directory: $APPLICATION_NAME"
 if [ -d "$APPLICATION_NAME" ]; then
