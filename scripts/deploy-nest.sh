@@ -19,14 +19,14 @@ PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
 cd /home/ubuntu
 
-if pm2 describe "$PROCESS_NAME" > /dev/null; then
-  sudo -u ubuntu pm2 stop "$PROCESS_NAME"
-  sudo -u ubuntu pm2 delete "$PROCESS_NAME"
-else
-  echo "No existing PM2 process named $PROCESS_NAME found, skipping stop/delete"
-fi
+# if pm2 describe "$PROCESS_NAME" > /dev/null; then
+#   sudo -u ubuntu pm2 stop "$PROCESS_NAME"
+#   sudo -u ubuntu pm2 delete "$PROCESS_NAME"
+# else
+#   echo "No existing PM2 process named $PROCESS_NAME found, skipping stop/delete"
+# fi
 
-rm -rf "$APPLICATION_NAME"
+# rm -rf "$APPLICATION_NAME"
 mkdir "$APPLICATION_NAME"
 cd "$APPLICATION_NAME"
 
