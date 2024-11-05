@@ -1,6 +1,6 @@
 #!/bin/bash
-# Version 10:18
-# set -e
+# Version 10:28
+set -e
 
 APPLICATION_NAME="$1"
 MONGODB_URI="$2"
@@ -18,8 +18,12 @@ PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
 cd /home/ubuntu
 
-sudo -u ubuntu pm2 stop "$PROCESS_NAME" || echo "No existing PM2 process $PROCESS_NAME to stop."
-sudo -u ubuntu pm2 delete "$PROCESS_NAME" || echo "No existing PM2 process $PROCESS_NAME to delete."
+if pm2 describe "$PROCESS_NAME" > /dev/null; then
+  sudo -u ubuntu pm2 stop "$PROCESS_NAME"
+  sudo -u ubuntu pm2 delete "$PROCESS_NAME"
+else
+  echo "No existing PM2 process named $PROCESS_NAME found, skipping stop/delete"
+fi
 
 rm -rf "$APPLICATION_NAME"
 mkdir "$APPLICATION_NAME"
