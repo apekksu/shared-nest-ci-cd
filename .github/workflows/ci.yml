@@ -1,4 +1,4 @@
-name: Shared CI/CD for NestJS with MySQL or MongoDB
+name: Shared CI/CD for NestJS with MySQL
 
 on:
   workflow_call:
@@ -16,36 +16,21 @@ on:
         required: false
         type: string
         default: 'eu-central-1'
-      database-type:
+      mysql-db-host:
         required: true
         type: string
-        default: "mysql"  # mysql or mongo
-      mongodb-type:
-        required: false
-        type: string
-        default: "cluster"  # cluster or docker
-      docker-mongo-port:
-        required: false
-        type: number
-        default: 27017  # Only required if mongodb-type is "docker"
-      mysql-db-host:
-        required: false
-        type: string
       mysql-db-port:
-        required: false
+        required: true
         type: number
     secrets:
       aws-access-key-id:
         required: true
       aws-secret-access-key:
         required: true
-      MONGODB_URI:
-        required: false  # used for MongoDB cluster option
       mysql-db-user:
-        required: false
+        required: true
       mysql-db-password:
-        required: false
-
+        required: true
 
 jobs:
   upload-shared-files:
@@ -131,28 +116,18 @@ jobs:
 
       - name: Deploy application using SSM
         run: |
-          if [ "${{ inputs.database-type }}" == "mongo" ] && [ "${{ inputs.mongodb-type }}" == "docker" ]; then
-            MONGODB_URI=""
-          else
-            MONGODB_URI="${{ secrets.MONGODB_URI }}"
-          fi
-      
           MYSQL_USER="${{ secrets.mysql-db-user }}"
           MYSQL_PASSWORD="${{ secrets.mysql-db-password }}"
-      
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="[
-              \"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh\",
-              \"chmod +x /tmp/deploy-nest.sh\",
-              \"/tmp/deploy-nest.sh '${{ inputs.application-name }}' '${MONGODB_URI}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.database-type }}' '${{ inputs.mongodb-type }}' '${{ inputs.mysql-db-host }}' '${{ inputs.mysql-db-port }}' '${MYSQL_USER}' '${MYSQL_PASSWORD}' '${{ inputs.docker-mongo-port }}'\"
-            ]" \
+            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh\",\"chmod +x /tmp/deploy-nest.sh\",\"/tmp/deploy-nest.sh '${{ inputs.application-name }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.mysql-db-host }}' '${{ inputs.mysql-db-port }}' '${MYSQL_USER}' '${MYSQL_PASSWORD}'\"]" \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
             --output text)
-      
+
           echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
 
       - name: Wait for SSM command to complete
