@@ -1,6 +1,6 @@
 #!/bin/bash
-# Version 9-29
-set -e
+# Version 10:18
+# set -e
 
 APPLICATION_NAME="$1"
 MONGODB_URI="$2"
@@ -18,38 +18,43 @@ PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
 cd /home/ubuntu
 
-sudo -u ubuntu pm2 stop "$PROCESS_NAME" || echo "Failed to stop $PROCESS_NAME, it may not be running"
-sudo -u ubuntu pm2 delete "$PROCESS_NAME" || echo "Failed to delete $PROCESS_NAME, it may not be running"
+sudo -u ubuntu pm2 stop "$PROCESS_NAME" || echo "No existing PM2 process $PROCESS_NAME to stop."
+sudo -u ubuntu pm2 delete "$PROCESS_NAME" || echo "No existing PM2 process $PROCESS_NAME to delete."
 
 rm -rf "$APPLICATION_NAME"
-
 mkdir "$APPLICATION_NAME"
 cd "$APPLICATION_NAME"
 
 echo "Downloading application package from S3"
-aws s3 cp "s3://${S3_BUCKET_NAME}/${APPLICATION_NAME}/${APPLICATION_NAME}.zip" . || exit 1
+if ! aws s3 cp "s3://${S3_BUCKET_NAME}/${APPLICATION_NAME}/${APPLICATION_NAME}.zip" .; then
+  echo "Failed to download application package from S3"
+  exit 1
+fi
 
 echo "Unzipping application package"
-unzip -o "${APPLICATION_NAME}.zip" || exit 1
+if ! unzip -o "${APPLICATION_NAME}.zip"; then
+  echo "Failed to unzip application package"
+  exit 1
+fi
 
 chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 
 if [ "$DATABASE_TYPE" = "mongo" ]; then
   echo "Updating port in main.js to $APPLICATION_PORT for MongoDB app"
-  sed -i "s/await app.listen(3000);/await app.listen($APPLICATION_PORT);/" dist/src/main.js || {
+  if ! sed -i "s/await app.listen(3000);/await app.listen($APPLICATION_PORT);/" dist/src/main.js; then
     echo "Failed to update port in main.js"
     exit 1
-  }
-fi
+  fi
 
-if [ "$DATABASE_TYPE" = "mongo" ]; then
   if [ "$MONGODB_TYPE" = "docker" ]; then
     echo "Setting up Docker MongoDB on port $DOCKER_MONGO_PORT"
-
     docker container stop mongodb-${APPLICATION_NAME} || echo "No container to stop"
     docker container rm mongodb-${APPLICATION_NAME} || echo "No container to remove"
 
-    docker run -d --name mongodb-${APPLICATION_NAME} --restart always -p "$DOCKER_MONGO_PORT":27017 mongo:latest || exit 1
+    if ! docker run -d --name mongodb-${APPLICATION_NAME} --restart always -p "$DOCKER_MONGO_PORT":27017 mongo:latest; then
+      echo "Failed to start Docker MongoDB"
+      exit 1
+    fi
 
     sudo -u ubuntu bash -c "printf 'MONGODB_URI=mongodb://localhost:%s/mydatabase\n' '$DOCKER_MONGO_PORT' > .env.dev" || exit 1
   else
@@ -57,10 +62,10 @@ if [ "$DATABASE_TYPE" = "mongo" ]; then
     sudo -u ubuntu bash -c "printf 'MONGODB_URI=%s\n' '$MONGODB_URI' > .env.dev" || exit 1
 
     echo "Downloading RDS CA bundle"
-    wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ubuntu/rds-combined-ca-bundle.pem || {
+    if ! wget https://s3.amazonaws.com/rds-downloads/rds-combined-ca-bundle.pem -O /home/ubuntu/rds-combined-ca-bundle.pem; then
       echo "Failed to download CA bundle"
       exit 1
-    }
+    fi
     chown ubuntu:ubuntu /home/ubuntu/rds-combined-ca-bundle.pem
   fi
 elif [ "$DATABASE_TYPE" = "mysql" ]; then
@@ -75,7 +80,10 @@ if [[ ! -f "dist/src/main.js" ]]; then
 fi
 
 echo "Starting application using PM2"
-sudo -u ubuntu pm2 start dist/src/main.js \
+if ! sudo -u ubuntu pm2 start dist/src/main.js \
   --name "$PROCESS_NAME" \
   --cwd "/home/ubuntu/${APPLICATION_NAME}" \
-  -- --port="$APPLICATION_PORT" || exit 1
+  -- --port="$APPLICATION_PORT"; then
+  echo "Failed to start application using PM2"
+  exit 1
+fi
