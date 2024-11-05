@@ -137,18 +137,21 @@ jobs:
           else
             MONGODB_URI="${{ secrets.MONGODB_URI }}"
           fi
-
+      
+          MYSQL_USER="${{ inputs.mysql-db-user }}"
+          MYSQL_PASSWORD="${{ inputs.mysql-db-password }}"
+      
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy.sh /tmp/deploy.sh\",\"chmod +x /tmp/deploy.sh\",\"/tmp/deploy.sh '${{ inputs.application-name }}' '$MONGODB_URI' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.database-type }}' '${{ inputs.mongodb-type }}' '${{ inputs.mysql-db-host }}' '${{ inputs.mysql-db-port }}' '${{ inputs.mysql-db-user }}' '${{ inputs.mysql-db-password }}' '${{ inputs.docker-mongo-port }}'\"]" \
+            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh\",\"chmod +x /tmp/deploy-nest.sh\",\"/tmp/deploy-nest.sh '${{ inputs.application-name }}' '$MONGODB_URI' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.database-type }}' '${{ inputs.mongodb-type }}' '${{ inputs.mysql-db-host }}' '${{ inputs.mysql-db-port }}' '$MYSQL_USER' '$MYSQL_PASSWORD' '${{ inputs.docker-mongo-port }}'\"]" \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
             --output text)
-
+      
           echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
-
+         
       - name: Wait for SSM command to complete
         run: |
           aws ssm wait command-executed \
