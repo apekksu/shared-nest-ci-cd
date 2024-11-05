@@ -26,7 +26,7 @@ cd /home/ubuntu
 #   echo "No existing PM2 process named $PROCESS_NAME found, skipping stop/delete"
 # fi
 
-# rm -rf "$APPLICATION_NAME"
+rm -rf "$APPLICATION_NAME"
 mkdir "$APPLICATION_NAME"
 cd "$APPLICATION_NAME"
 
