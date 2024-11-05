@@ -2,6 +2,7 @@
 # Version 10:33
 set -e
 
+export HOME=/home/ubuntu
 APPLICATION_NAME="$1"
 MONGODB_URI="$2"
 APPLICATION_PORT="$3"
