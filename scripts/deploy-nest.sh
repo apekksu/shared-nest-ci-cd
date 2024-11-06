@@ -5,11 +5,7 @@ export HOME=/home/ubuntu
 APPLICATION_NAME="$1"
 APPLICATION_PORT="$2"
 S3_BUCKET_NAME="$3"
-MYSQL_DB_HOST="$4"
-MYSQL_DB_PORT="$5"
-MYSQL_DB_USER="$6"
-MYSQL_DB_PASSWORD="$7"
-SECRET_NAME="$8"
+SECRET_NAME="$4"
 
 PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
@@ -19,16 +15,19 @@ echo "Starting deployment script for $APPLICATION_NAME..."
 
 cd /home/ubuntu
 
+# Stop and delete existing PM2 process if it exists
 if pm2 describe "$PROCESS_NAME" > /dev/null; then
   echo "Stopping and deleting existing PM2 process: $PROCESS_NAME"
   sudo -u ubuntu pm2 stop "$PROCESS_NAME"
   sudo -u ubuntu pm2 delete "$PROCESS_NAME"
 fi
 
+# Remove existing application directory if it exists
 if [ -d "$APPLICATION_NAME" ]; then
   echo "Directory $APPLICATION_NAME already exists. Removing it."
   rm -rf "$APPLICATION_NAME"
 fi
+
 mkdir "$APPLICATION_NAME"
 cd "$APPLICATION_NAME"
 
@@ -51,7 +50,12 @@ chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 echo "Fetching secrets from AWS Secrets Manager"
 SECRET_VALUES=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
 
-eval $(echo "$SECRET_VALUES" | jq -r 'to_entries | .[] | "export \(.key)=\(.value)"')
+# Write secrets to .env file in the application directory
+echo "$SECRET_VALUES" | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
+
+# Set secure permissions for the .env file
+chmod 600 .env
+chown ubuntu:ubuntu .env
 
 if [[ ! -f "dist/main.js" ]]; then
   echo "Error: dist/main.js not found"
@@ -59,12 +63,9 @@ if [[ ! -f "dist/main.js" ]]; then
 fi
 
 echo "Starting application using PM2"
-if ! sudo -u ubuntu pm2 start dist/main.js \
+sudo -u ubuntu pm2 start dist/main.js \
   --name "$PROCESS_NAME" \
   --cwd "/home/ubuntu/${APPLICATION_NAME}" \
-  -- --port="$APPLICATION_PORT"; then
-  echo "Failed to start application using PM2"
-  exit 1
-fi
+  -- --port="$APPLICATION_PORT"
 
 echo "Deployment completed successfully!"

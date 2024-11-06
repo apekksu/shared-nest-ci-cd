@@ -100,19 +100,19 @@ jobs:
             echo "Error: EC2_INSTANCE_ID is empty. Exiting."
             exit 1
           fi
+          
       - name: Deploy application using SSM
         run: |
-          MYSQL_USER="${{ secrets.mysql-db-user }}"
-          MYSQL_PASSWORD="${{ secrets.mysql-db-password }}"
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh\",\"chmod +x /tmp/deploy-nest.sh\",\"/tmp/deploy-nest.sh '${{ inputs.application-name }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.mysql-db-host }}' '${{ inputs.mysql-db-port }}' '${MYSQL_USER}' '${MYSQL_PASSWORD}' '${{ inputs.secret-name }}'\"]" \
+            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh\",\"chmod +x /tmp/deploy-nest.sh\",\"/tmp/deploy-nest.sh '${{ inputs.application-name }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.secret-name }}'\"]" \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
             --output text)
           echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
+
       - name: Wait for SSM command to complete
         run: |
           aws ssm wait command-executed \
