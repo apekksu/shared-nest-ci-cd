@@ -1,4 +1,4 @@
-name: Shared CI/CD for NestJS with MySQL
+name: Shared CI/CD for NestJS
 
 on:
   workflow_call:
@@ -16,23 +16,13 @@ on:
         required: false
         type: string
         default: 'eu-central-1'
-      mysql-db-host:
-        required: true
-        type: string
-      mysql-db-port:
-        required: true
-        type: number
-      secret-name:          # New input for SECRET_NAME
+      secret-name:
         required: true
         type: string
     secrets:
       aws-access-key-id:
         required: true
       aws-secret-access-key:
-        required: true
-      mysql-db-user:
-        required: true
-      mysql-db-password:
         required: true
 
 jobs:
@@ -100,7 +90,7 @@ jobs:
             echo "Error: EC2_INSTANCE_ID is empty. Exiting."
             exit 1
           fi
-          
+
       - name: Deploy application using SSM
         run: |
           COMMAND_ID=$(aws ssm send-command \
