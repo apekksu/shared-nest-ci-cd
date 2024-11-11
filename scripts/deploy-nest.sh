@@ -15,14 +15,12 @@ echo "Starting deployment script for $APPLICATION_NAME..."
 
 cd /home/ubuntu
 
-# Stop and delete existing PM2 process if it exists
 if pm2 describe "$PROCESS_NAME" > /dev/null; then
   echo "Stopping and deleting existing PM2 process: $PROCESS_NAME"
   sudo -u ubuntu pm2 stop "$PROCESS_NAME"
   sudo -u ubuntu pm2 delete "$PROCESS_NAME"
 fi
 
-# Remove existing application directory if it exists
 if [ -d "$APPLICATION_NAME" ]; then
   echo "Directory $APPLICATION_NAME already exists. Removing it."
   rm -rf "$APPLICATION_NAME"
@@ -50,10 +48,8 @@ chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 echo "Fetching secrets from AWS Secrets Manager"
 SECRET_VALUES=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
 
-# Write secrets to .env file in the application directory
 echo "$SECRET_VALUES" | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
 
-# Set secure permissions for the .env file
 chmod 600 .env
 chown ubuntu:ubuntu .env
 
