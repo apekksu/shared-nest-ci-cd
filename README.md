@@ -1,9 +1,8 @@
 ### `Shared NestJS CI/CD pipeline`
 This repository provides a shared CI/CD pipeline for deploying NestJS applications to an EC2 instance, using a RDS Mysql instance.
 
-Table of Contents
 
-Getting Started
+### `Getting Started`
 To use the shared CI/CD pipeline, follow these steps:
 
 Create or clone your NestJS application repository.
