@@ -1,4 +1,4 @@
-name: Shared CI/CD for Next.js
+name: Shared CI/CD for NestJS
 
 on:
   workflow_call:
@@ -28,118 +28,88 @@ on:
 jobs:
   upload-shared-files:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Shared Repository
         uses: actions/checkout@v4
         with:
-          repository: 'apekksu/shared-next-ci-cd'
+          repository: 'apekksu/shared-nest-ci-cd'
           ref: 'main'
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
           aws-region: ${{ inputs.aws-region }}
-
       - name: Upload deploy script to S3
         run: |
-          echo "Uploading deploy-next.sh from shared repository to S3"
-          aws s3 cp ./scripts/deploy-next.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy-next.sh
+          aws s3 cp ./scripts/deploy-nest.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh
 
   build-and-deploy:
     needs: upload-shared-files
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Application Repository
         uses: actions/checkout@v4
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
           aws-region: ${{ inputs.aws-region }}
-
       - name: Setup Node.js environment
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-
-      - name: Fetch secrets from AWS Secrets Manager
-        run: |
-          set +x  # Disable command echoing
-          SECRET_VALUES=$(aws secretsmanager get-secret-value --secret-id "${{ inputs.secret-name }}" --query SecretString --output text)
-          echo "::add-mask::$SECRET_VALUES"  # Mask the secret in logs
-          echo "$SECRET_VALUES" > .env
-
       - name: Install dependencies
         run: npm ci
-
       - name: Build application
         run: npm run build
-
-      - name: Remove .env file
-        run: rm .env
-
       - name: Package application
         run: |
           zip -r ${{ inputs.application-name }}.zip \
-            .next \
+            dist \
             package.json \
-            package-lock.json
-
+            package-lock.json \
+            node_modules
       - name: Upload package to S3
         run: |
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
-
       - name: Retrieve Shared EC2 Instance Information
         run: |
           EC2_INFO=$(aws ec2 describe-instances \
-            --filters "Name=tag:App,Values=shared-next-ci-cd" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:App,Values=shared-nest-ci-cd" "Name=instance-state-name,Values=running" \
             --query "Reservations[].Instances[].[InstanceId, PublicIpAddress]" \
             --output text)
-
           EC2_INSTANCE_ID=$(echo "$EC2_INFO" | awk '{print $1}')
           EC2_PUBLIC_IP=$(echo "$EC2_INFO" | awk '{print $2}')
-
           echo "EC2 Instance ID: $EC2_INSTANCE_ID"
           echo "EC2 Public IP: $EC2_PUBLIC_IP"
-
           echo "EC2_INSTANCE_ID=$EC2_INSTANCE_ID" >> $GITHUB_ENV
           echo "EC2_PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
-
           if [ -z "$EC2_INSTANCE_ID" ]; then
             echo "Error: EC2_INSTANCE_ID is empty. Exiting."
             exit 1
           fi
 
       - name: Deploy application using SSM
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-next.sh /tmp/deploy-next.sh\",\"chmod +x /tmp/deploy-next.sh\",\"/tmp/deploy-next.sh '${{ inputs.application-name }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.secret-name }}'\"]" \
+            --parameters commands="[\"aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh\",\"chmod +x /tmp/deploy-nest.sh\",\"/tmp/deploy-nest.sh '${{ inputs.application-name }}' '${{ inputs.application-port }}' '${{ inputs.s3-bucket-name }}' '${{ inputs.secret-name }}'\"]" \
             --timeout-seconds 600 \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" \
             --output text)
-
           echo "COMMAND_ID=$COMMAND_ID" >> $GITHUB_ENV
 
       - name: Wait for SSM command to complete
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
           aws ssm wait command-executed \
             --command-id "${{ env.COMMAND_ID }}" \
             --instance-id "${{ env.EC2_INSTANCE_ID }}" \
             --region ${{ inputs.aws-region }}
-
       - name: Verify Deployment
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: |
           echo "Deployment completed."
           echo "Application is accessible at http://${{ env.EC2_PUBLIC_IP }}:${{ inputs.application-port }}/"
