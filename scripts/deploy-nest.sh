@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex
+# set -ex
 
 export HOME=/home/ubuntu
 APPLICATION_NAME="$1"
