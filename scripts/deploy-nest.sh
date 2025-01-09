@@ -15,10 +15,10 @@ echo "Starting deployment script for $APPLICATION_NAME..."
 
 cd /home/ubuntu
 
-if pm2 describe "$PROCESS_NAME" > /dev/null; then
+if pm2 describe "$PROCESS_NAME" > /dev/null 2>&1 || true; then
   echo "Stopping and deleting existing PM2 process: $PROCESS_NAME"
-  sudo -u ubuntu pm2 stop "$PROCESS_NAME"
-  sudo -u ubuntu pm2 delete "$PROCESS_NAME"
+  sudo -u ubuntu pm2 stop "$PROCESS_NAME" || true
+  sudo -u ubuntu pm2 delete "$PROCESS_NAME" || true
 fi
 
 if [ -d "$APPLICATION_NAME" ]; then
