@@ -9,7 +9,7 @@ SECRET_NAME="$4"
 
 PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
-exec > >(tee -a /var/log/deploy_script.log) 2>&1
+exec > >(tee -a /home/ubuntu/deploy_script.log) 2>&1
 
 echo "Starting deployment script for $APPLICATION_NAME..."
 
