@@ -12,25 +12,43 @@ Set up the correct directory structure:
 Commit and push to the branch mentioned in your yaml for automatic deployment.
 
 ```yaml
-name: Deploy NestJS App
+name: Deploy NestJS app
 
 on:
   push:
     branches:
       - main
+      - prod
 
 jobs:
-  deploy:
-    uses: apekksu/shared-nest-ci-cd/.github/workflows/ci.yml@main
-    with:
-      s3-bucket-name: apekksu-cyberfolk-dev-euc1
-      application-name: ${{ github.event.repository.name }}
-      application-port: 3000
-      aws-region: eu-central-1
-      secret-name: cyberfolk-dev
-    secrets:
-      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  set-params-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check branch and set inputs
+        id: set-vars
+        run: |
+          echo "Branch name: ${{ github.ref_name }}"
+          if [ "${{ github.ref_name }}" = "prod" ]; then
+            echo "s3_bucket=apekksu-cyberfolk-prod-euc1" >> $GITHUB_OUTPUT
+            echo "secret_name=cyberfolk-prod" >> $GITHUB_OUTPUT
+            echo "application_port=3005" >> $GITHUB_OUTPUT
+          else
+            echo "s3_bucket=apekksu-cyberfolk-dev-euc1" >> $GITHUB_OUTPUT
+            echo "secret_name=cyberfolk-dev" >> $GITHUB_OUTPUT
+            echo "application_port=3000" >> $GITHUB_OUTPUT
+
+      - name: Call shared pipeline
+        uses: apekksu/shared-nest-ci-cd/.github/workflows/ci.yml@main
+        with:
+          s3-bucket-name: ${{ steps.set-vars.outputs.s3_bucket }}
+          application-name: ${{ github.event.repository.name }}
+          application-port: ${{ steps.set-vars.outputs.application_port }}
+          aws-region: eu-central-1
+          secret-name: ${{ steps.set-vars.outputs.secret_name }}
+        secrets:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 ```
 
 ### `Using organizaion level secrets`
