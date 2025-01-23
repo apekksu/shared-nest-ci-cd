@@ -43,7 +43,7 @@ jobs:
         with:
           s3-bucket-name: ${{ steps.set-vars.outputs.s3_bucket }}
           application-name: ${{ github.event.repository.name }}
-          application-port: ${{ steps.set-vars.outputs.application_port }}
+          application-port: ${{ steps.set-vars.outputs.application_port }}  
           aws-region: eu-central-1
           secret-name: ${{ steps.set-vars.outputs.secret_name }}
         secrets:
