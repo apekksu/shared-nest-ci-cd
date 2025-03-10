@@ -45,10 +45,37 @@ jobs:
           application-name: ${{ github.event.repository.name }}
           application-port: ${{ steps.set-vars.outputs.application_port }}  
           aws-region: eu-central-1
+          ec2-app-tag: shared-nest-ci-cd # or shared-nest-ci-cd-for-ai 
           secret-name: ${{ steps.set-vars.outputs.secret_name }}
         secrets:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+```
+
+### `Simnplified version without environment option`
+
+```yaml
+name: Deploy NestJS App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    uses: apekksu/shared-nest-ci-cd/.github/workflows/ci.yml@main
+    with:
+      s3-bucket-name: apekksu-cyberfolk-dev-euc1
+      application-name: ${{ github.event.repository.name }}
+      application-port: 3000
+      aws-region: eu-central-1
+      secret-name: cyberfolk-dev
+      ec2-app-tag: shared-nest-ci-cd # or shared-nest-ci-cd-for-ai 
+    secrets:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
 ```
 
 ### `Using organizaion level secrets`
