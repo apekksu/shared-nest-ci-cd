@@ -19,6 +19,9 @@ on:
       secret-name:
         required: true
         type: string
+      ec2-app-tag: # 👈 NEW INPUT DEFINITION HERE
+        required: true
+        type: string
     secrets:
       aws-access-key-id:
         required: true
@@ -74,10 +77,11 @@ jobs:
       - name: Upload package to S3
         run: |
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
-      - name: Retrieve Shared EC2 Instance Information
+      
+      - name: Retrieve Specific EC2 Instance Information
         run: |
           EC2_INFO=$(aws ec2 describe-instances \
-            --filters "Name=tag:App,Values=shared-nest-ci-cd" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:App,Values=${{ inputs.ec2-app-tag }}" "Name=instance-state-name,Values=running" \
             --query "Reservations[].Instances[].[InstanceId, PublicIpAddress]" \
             --output text)
           EC2_INSTANCE_ID=$(echo "$EC2_INFO" | awk '{print $1}')
@@ -112,7 +116,6 @@ jobs:
 
       - name: Show SSM command logs
         if: always()
-        # if: failure()
         run: |
           echo "===== Fetching SSM logs ====="
           aws ssm get-command-invocation \
