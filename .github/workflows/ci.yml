@@ -72,7 +72,6 @@ jobs:
           zip -r ${{ inputs.application-name }}.zip \
             dist \
             package.json \
-            repos \
             package-lock.json \
             node_modules
       - name: Upload package to S3
