@@ -59,10 +59,11 @@ if [[ ! -f "dist/main.js" ]]; then
   exit 1
 fi
 
-echo "Starting application using PM2"
-sudo -u ubuntu pm2 start dist/main.js \
+echo "Starting application using PM2 and npm start with APPLICATION_PORT=$APPLICATION_PORT"
+sudo -u ubuntu pm2 start npm \
   --name "$PROCESS_NAME" \
   --cwd "/home/ubuntu/${APPLICATION_NAME}" \
-  -- --port="$APPLICATION_PORT"
+  --env "APPLICATION_PORT=$APPLICATION_PORT" \
+  -- start
 
 echo "Deployment completed successfully!"
