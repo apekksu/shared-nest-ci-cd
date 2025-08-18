@@ -79,21 +79,37 @@ jobs:
           aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
       
       - name: Retrieve Specific EC2 Instance Information
+        shell: bash
         run: |
-          EC2_INFO=$(aws ec2 describe-instances \
+          set -euo pipefail
+      
+          MAPFILE -t IDS < <(aws ec2 describe-instances \
             --filters "Name=tag:App,Values=${{ inputs.ec2-app-tag }}" "Name=instance-state-name,Values=running" \
-            --query "Reservations[].Instances[].[InstanceId, PublicIpAddress]" \
-            --output text)
-          EC2_INSTANCE_ID=$(echo "$EC2_INFO" | awk '{print $1}')
-          EC2_PUBLIC_IP=$(echo "$EC2_INFO" | awk '{print $2}')
-          echo "EC2 Instance ID: $EC2_INSTANCE_ID"
-          echo "EC2 Public IP: $EC2_PUBLIC_IP"
-          echo "EC2_INSTANCE_ID=$EC2_INSTANCE_ID" >> $GITHUB_ENV
-          echo "EC2_PUBLIC_IP=$EC2_PUBLIC_IP" >> $GITHUB_ENV
-          if [ -z "$EC2_INSTANCE_ID" ]; then
-            echo "Error: EC2_INSTANCE_ID is empty. Exiting."
+            --query 'Reservations[].Instances[].InstanceId' --output text)
+      
+          COUNT=${#IDS[@]}
+          if [[ $COUNT -eq 0 ]]; then
+            echo "No running instances found for App=${{ inputs.ec2-app-tag }}"; exit 1
+          elif [[ $COUNT -gt 1 ]]; then
+            echo "Expected exactly 1 running instance for App=${{ inputs.ec2-app-tag }}, found $COUNT:" 
+            aws ec2 describe-instances \
+              --filters "Name=tag:App,Values=${{ inputs.ec2-app-tag }}" "Name=instance-state-name,Values=running" \
+              --query 'Reservations[].Instances[].{Id:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,IP:PublicIpAddress,Launch:LaunchTime}' \
+              --output table
             exit 1
           fi
+      
+          EC2_INSTANCE_ID="${IDS[0]}"
+          EC2_PUBLIC_IP=$(aws ec2 describe-instances --instance-ids "$EC2_INSTANCE_ID" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+      
+          echo "EC2 Instance ID: $EC2_INSTANCE_ID"
+          echo "EC2 Public IP: ${EC2_PUBLIC_IP:-}"
+      
+          {
+            printf 'EC2_INSTANCE_ID=%s\n' "$EC2_INSTANCE_ID"
+            printf 'EC2_PUBLIC_IP=%s\n' "${EC2_PUBLIC_IP:-}"
+          } >> "$GITHUB_ENV"
 
       - name: Deploy application using SSM
         run: |
