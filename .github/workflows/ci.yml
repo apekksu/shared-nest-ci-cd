@@ -134,7 +134,7 @@ jobs:
         run: |
           set -euo pipefail
           export AWS_PAGER=""
-      
+
           CMDS_JSON=$(
             printf '%s\n' \
               "bash -lc 'echo ==== preflight diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; echo ==== ubuntu user node/npm ====; sudo -u ubuntu bash -lc \"node -v; npm -v\" || true; sudo -u ubuntu -H which pm2 || true; sudo -u ubuntu -H pm2 -v || true'" \
@@ -145,7 +145,7 @@ jobs:
               "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\"'" \
             | jq -R . | jq -s '{commands: .}'
           )
-      
+
           COMMAND_ID=$(aws --no-cli-pager ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
@@ -156,9 +156,11 @@ jobs:
             --comment "deploy ${{ inputs.application-name }} run $GITHUB_RUN_ID" \
             --query "Command.CommandId" \
             --output text)
-      
+
           echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
           echo "Sent command: $COMMAND_ID"
+  
+  
 
       - name: Wait and dump SSM output
         shell: bash
