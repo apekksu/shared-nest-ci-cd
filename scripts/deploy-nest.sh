@@ -93,9 +93,12 @@ fi
 
 sudo -u ubuntu bash -lc 'pm2 ping >/dev/null 2>&1 || true; pm2 startup systemd -u ubuntu --hp /home/ubuntu >/dev/null 2>&1 || true'
 
-echo "Starting application via PM2: node $ENTRY (APPLICATION_PORT=$APPLICATION_PORT)"
+echo "Starting application via PM2 (node $ENTRY) with APPLICATION_PORT=$APPLICATION_PORT"
 sudo -u ubuntu bash -lc \
-  "PORT=$APPLICATION_PORT APPLICATION_PORT=$APPLICATION_PORT NODE_ENV=production \
-   pm2 start 'node $ENTRY' --name '$PROCESS_NAME' --cwd '/home/ubuntu/${APPLICATION_NAME}' --time --update-env && pm2 save"
+  "export PORT=$APPLICATION_PORT APPLICATION_PORT=$APPLICATION_PORT NODE_ENV=production; \
+   pm2 delete '$PROCESS_NAME' >/dev/null 2>&1 || true; \
+   pm2 start '$ENTRY' --name '$PROCESS_NAME' --cwd '/home/ubuntu/${APPLICATION_NAME}' --update-env; \
+   pm2 save"
+
 
 echo "Deployment completed successfully!"
