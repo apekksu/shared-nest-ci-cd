@@ -59,6 +59,11 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Package application
+        run: |
+          zip -r ${{ inputs.application-name }}.zip \
+            dist package.json package-lock.json node_modules
+
       - name: Inspect artifact layout (debug)
         run: |
           echo "== zip contents (top 200 lines) =="
@@ -69,11 +74,6 @@ jobs:
             | awk '{print $NF}' \
             | grep -E '^dist/(src/)?main\.js$' \
             || echo "No entry file matched."
-
-      - name: Package application
-        run: |
-          zip -r ${{ inputs.application-name }}.zip \
-            dist package.json package-lock.json node_modules
 
       - name: Upload package to S3
         run: |
@@ -134,7 +134,7 @@ jobs:
 
           CMDS_JSON=$(
             printf '%s\n' \
-              "bash -lc 'echo ==== preflight diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; which pm2 || true; pm2 -v || true'" \
+              "bash -lc 'echo ==== preflight diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; sudo -u ubuntu -H which pm2 || true; sudo -u ubuntu -H pm2 -v || true'" \
               "aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh" \
               "chmod +x /tmp/deploy-nest.sh" \
               "sed -i -E \"s|^exec > .*tee .*|# disabled by CI: exec tee|\" /tmp/deploy-nest.sh || true" \
@@ -201,13 +201,13 @@ jobs:
           cat > log_params.json <<JSON
           {
             "commands": [
-              "echo ===== /home/ubuntu/deploy_script.log (tail -300) =====",
+              "echo '===== /home/ubuntu/deploy_script.log (tail -300) ====='",
               "sudo tail -n 300 /home/ubuntu/deploy_script.log || true",
               "echo",
-              "echo ===== pm2 list =====",
+              "echo '===== pm2 list ====='",
               "sudo -u ubuntu pm2 list || true",
               "echo",
-              "echo ===== /var/log/cloud-init-output.log (tail -100) =====",
+              "echo '===== /var/log/cloud-init-output.log (tail -100) ====='",
               "sudo tail -n 100 /var/log/cloud-init-output.log || true"
             ]
           }
