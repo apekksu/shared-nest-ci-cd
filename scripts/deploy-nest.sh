@@ -1,5 +1,11 @@
 #!/bin/bash
-set -ex
+set -Eeuo pipefail
+
+
+export AWS_PAGER=""
+umask 027
+
+trap 'rc=$?; echo "[deploy] finished with exit code $rc"; exit $rc' EXIT
 
 export HOME=/home/ubuntu
 APPLICATION_NAME="$1"
@@ -43,16 +49,23 @@ if ! unzip -o "${APPLICATION_NAME}.zip" > /dev/null; then
   exit 1
 fi
 echo "Application package unzipped successfully."
+rm -f "${APPLICATION_NAME}.zip" || true
 
 chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 
 echo "Fetching secrets from AWS Secrets Manager"
-SECRET_VALUES=$(aws secretsmanager get-secret-value --secret-id "$SECRET_NAME" --query SecretString --output text)
 
-echo "$SECRET_VALUES" | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
+set +x
+aws secretsmanager get-secret-value \
+  --secret-id "$SECRET_NAME" \
+  --query SecretString \
+  --output text \
+  | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
+set -x
 
 chmod 600 .env
 chown ubuntu:ubuntu .env
+
 
 if [[ -f "dist/main.js" ]]; then
   echo "Found dist/main.js"
@@ -78,12 +91,12 @@ else
   exit 2
 fi
 
+sudo -u ubuntu bash -lc 'pm2 ping >/dev/null 2>&1 || true; pm2 startup systemd -u ubuntu --hp /home/ubuntu >/dev/null 2>&1 || true'
 
 echo "Starting application using PM2 and npm start with APPLICATION_PORT=$APPLICATION_PORT"
-sudo -u ubuntu pm2 start npm \
-  --name "$PROCESS_NAME" \
-  --cwd "/home/ubuntu/${APPLICATION_NAME}" \
-  --env "APPLICATION_PORT=$APPLICATION_PORT" \
-  -- start
+sudo -u ubuntu bash -lc \
+  "PORT=$APPLICATION_PORT APPLICATION_PORT=$APPLICATION_PORT NODE_ENV=production \
+   pm2 start npm --name '$PROCESS_NAME' --cwd '/home/ubuntu/${APPLICATION_NAME}' -- start && pm2 save"
+
 
 echo "Deployment completed successfully!"

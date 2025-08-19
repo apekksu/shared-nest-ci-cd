@@ -59,6 +59,9 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Prune to production deps
+        run: npm prune --omit=dev
+
       - name: Package application
         run: |
           zip -r ${{ inputs.application-name }}.zip \
@@ -137,7 +140,6 @@ jobs:
               "bash -lc 'echo ==== preflight diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; sudo -u ubuntu -H which pm2 || true; sudo -u ubuntu -H pm2 -v || true'" \
               "aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh" \
               "chmod +x /tmp/deploy-nest.sh" \
-              "sed -i -E \"s|^exec > .*tee .*|# disabled by CI: exec tee|\" /tmp/deploy-nest.sh || true" \
               "sed -i -E 's/^[[:space:]]*set[[:space:]]+-x/# set -x disabled by CI/g' /tmp/deploy-nest.sh || true" \
               "sed -i -E '0,/get-secret-value/{ s|(aws secretsmanager get-secret-value[^\\n]*)|set +x; \\1; set -x| }' /tmp/deploy-nest.sh || true" \
               "bash -lc 'command -v pm2 >/dev/null 2>&1 || npm i -g pm2'" \
