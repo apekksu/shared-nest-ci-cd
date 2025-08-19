@@ -190,6 +190,16 @@ jobs:
           done
           echo "Timed out waiting for SSM command"; exit 1
 
+      - name: Health check
+        run: |
+          for i in {1..20}; do
+            code=$(curl -s -L --connect-timeout 3 --max-time 5 -o /dev/null -w '%{http_code}' "http://${{ env.EC2_PUBLIC_IP }}:${{ inputs.application-port }}/health")
+            echo "HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 3
+          done
+          echo "Health check failed"; exit 1
+        
       - name: Fetch remote deploy logs
         if: always()
         continue-on-error: true

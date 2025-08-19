@@ -64,6 +64,20 @@ else
   find dist -maxdepth 2 -type f -printf ' - %P\n' 2>/dev/null || true
 fi
 
+ENTRY=""
+if [[ -f dist/main.js ]]; then
+  ENTRY="dist/main.js"
+elif [[ -f dist/src/main.js ]]; then
+  ENTRY="dist/src/main.js"
+fi
+
+if [[ -n "$ENTRY" ]]; then
+  echo "Entry file detected: $ENTRY"
+else
+  echo "ERROR: No entry file found (tried dist/main.js and dist/src/main.js)"
+  exit 2
+fi
+
 
 echo "Starting application using PM2 and npm start with APPLICATION_PORT=$APPLICATION_PORT"
 sudo -u ubuntu pm2 start npm \
