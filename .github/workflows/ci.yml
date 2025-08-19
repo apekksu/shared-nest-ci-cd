@@ -59,6 +59,17 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Inspect artifact layout (debug)
+        run: |
+          echo "== zip contents (top 200 lines) =="
+          unzip -l "${{ inputs.application-name }}.zip" | sed -n '1,200p'
+          echo
+          echo "== does it contain dist/main.js or dist/src/main.js? =="
+          unzip -l "${{ inputs.application-name }}.zip" \
+            | awk '{print $NF}' \
+            | grep -E '^dist/(src/)?main\.js$' \
+            || echo "No entry file matched."
+
       - name: Package application
         run: |
           zip -r ${{ inputs.application-name }}.zip \
