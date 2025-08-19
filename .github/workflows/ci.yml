@@ -11,7 +11,9 @@ on:
       ec2-app-tag: { required: true, type: string }
       healthcheck-enabled: { required: false, type: boolean, default: false }
       healthcheck-path: { required: false, type: string, default: '/health' }
-
+    secrets:
+      aws-access-key-id: { required: true }
+      aws-secret-access-key: { required: true }
 
 jobs:
   upload-shared-files:
