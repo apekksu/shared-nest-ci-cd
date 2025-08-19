@@ -54,10 +54,16 @@ echo "$SECRET_VALUES" | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
 chmod 600 .env
 chown ubuntu:ubuntu .env
 
-if [[ ! -f "dist/main.js" ]]; then
-  echo "Error: dist/main.js not found"
-  exit 1
+if [[ -f "dist/main.js" ]]; then
+  echo "Found dist/main.js"
+elif [[ -f "dist/src/main.js" ]]; then
+  echo "Found dist/src/main.js"
+else
+  echo "Warning: no dist/main.js or dist/src/main.js found after unzip."
+  echo "dist tree (max depth 2):"
+  find dist -maxdepth 2 -type f -printf ' - %P\n' 2>/dev/null || true
 fi
+
 
 echo "Starting application using PM2 and npm start with APPLICATION_PORT=$APPLICATION_PORT"
 sudo -u ubuntu pm2 start npm \
