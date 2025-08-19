@@ -67,37 +67,19 @@ set -x
 chmod 600 .env
 chown ubuntu:ubuntu .env
 
-if [[ -f "dist/main.js" ]]; then
-  echo "Found dist/main.js"
-elif [[ -f "dist/src/main.js" ]]; then
-  echo "Found dist/src/main.js"
-else
-  echo "Warning: no dist/main.js or dist/src/main.js found after unzip."
-  echo "dist tree (max depth 2):"
-  find dist -maxdepth 2 -type f -printf ' - %P\n' 2>/dev/null || true
-fi
-
-ENTRY=""
-if [[ -f dist/main.js ]]; then
-  ENTRY="dist/main.js"
-elif [[ -f dist/src/main.js ]]; then
-  ENTRY="dist/src/main.js"
-fi
-
-if [[ -n "$ENTRY" ]]; then
-  echo "Entry file detected: $ENTRY"
-else
-  echo "ERROR: No entry file found (tried dist/main.js and dist/src/main.js)"
+if [[ ! -f "package.json" ]]; then
+  echo "ERROR: package.json not found. Cannot use npm start."
   exit 2
 fi
+echo "Found package.json - will use npm start"
 
 sudo -u ubuntu bash -lc 'pm2 ping >/dev/null 2>&1 || true; pm2 startup systemd -u ubuntu --hp /home/ubuntu >/dev/null 2>&1 || true'
 
-echo "Starting application via PM2 (node $ENTRY) with APPLICATION_PORT=$APPLICATION_PORT"
+echo "Starting application via PM2 (npm start) with APPLICATION_PORT=$APPLICATION_PORT"
 sudo -u ubuntu bash -lc \
   "export PORT=$APPLICATION_PORT APPLICATION_PORT=$APPLICATION_PORT NODE_ENV=production; \
    pm2 delete '$PROCESS_NAME' >/dev/null 2>&1 || true; \
-   pm2 start '$ENTRY' --name '$PROCESS_NAME' --cwd '/home/ubuntu/${APPLICATION_NAME}' --update-env; \
+   pm2 start npm --name '$PROCESS_NAME' --cwd '/home/ubuntu/${APPLICATION_NAME}' -- start --update-env; \
    pm2 save"
 
 
