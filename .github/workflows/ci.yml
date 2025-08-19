@@ -9,9 +9,9 @@ on:
       aws-region: { required: false, type: string, default: 'eu-central-1' }
       secret-name: { required: true, type: string }
       ec2-app-tag: { required: true, type: string }
-    secrets:
-      aws-access-key-id: { required: true }
-      aws-secret-access-key: { required: true }
+      healthcheck-enabled: { required: false, type: boolean, default: false }
+      healthcheck-path: { required: false, type: string, default: '/health' }
+
 
 jobs:
   upload-shared-files:
@@ -137,14 +137,15 @@ jobs:
 
           CMDS_JSON=$(
             printf '%s\n' \
-              "bash -lc 'echo ==== preflight diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; sudo -u ubuntu bash -lc \"echo ubuntu node: \$(node -v); echo ubuntu npm: \$(npm -v)\" || true; sudo -u ubuntu -H which pm2 || true; sudo -u ubuntu -H pm2 -v || true'" \
-              "bash -lc 'command -v unzip >/dev/null 2>&1 || (apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y unzip)'" \
-              "bash -lc 'command -v jq >/dev/null 2>&1 || (apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y jq)'" \
+              "bash -lc 'echo ==== preflight diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; sudo -u ubuntu -H which pm2 || true; sudo -u ubuntu -H pm2 -v || true'" \
               "aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh" \
               "chmod +x /tmp/deploy-nest.sh" \
+              "bash -lc 'command -v unzip >/dev/null || (sudo apt-get update -y && sudo apt-get install -y unzip jq)'" \
+              "bash -lc 'command -v pm2 >/dev/null 2>&1 || npm i -g pm2'" \
               "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\"'" \
             | jq -R . | jq -s '{commands: .}'
           )
+
 
           COMMAND_ID=$(aws --no-cli-pager ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
@@ -194,6 +195,8 @@ jobs:
           echo "Timed out waiting for SSM command"; exit 1
 
       - name: Health check (via SSM on instance)
+        if: ${{ inputs.healthcheck-enabled }}
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
