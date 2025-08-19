@@ -81,8 +81,8 @@ jobs:
             || echo "No entry file matched."
 
       - name: Upload package to S3
-        run: |
-          aws s3 cp ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
+        run: aws s3 cp --only-show-errors ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
+          
 
       - name: Retrieve Specific EC2 Instance Information
         shell: bash
@@ -207,7 +207,7 @@ jobs:
               "bash -lc 'set -e
                 name=\"${{ inputs.application-name }}-${{ inputs.application-port }}\"
                 port=${{ inputs.application-port }}
-                hp=\${HEALTH_PATH:-/health}
+                hp=\${HEALTH_PATH:-${{ inputs.healthcheck-path }}}
                 for i in {1..40}; do
                   code=\$(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:\$port\"\$hp\" || true)
                   echo LOCAL_HTTP \$code
@@ -250,7 +250,7 @@ jobs:
         run: |
           for i in {1..20}; do
             code=$(curl -sS --connect-timeout 3 --max-time 5 -o /dev/null -w '%{http_code}' \
-              "http://${{ env.EC2_PUBLIC_IP }}:${{ inputs.application-port }}/health" || true)
+              "http://${{ env.EC2_PUBLIC_IP }}:${{ inputs.application-port }}${{ inputs.healthcheck-path }}" || true)
             echo "PUBLIC_HTTP $code"
             case "$code" in
               2*|3*|404) exit 0;;  # OK if healthy or just missing route
