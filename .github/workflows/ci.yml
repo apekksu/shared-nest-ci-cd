@@ -137,13 +137,12 @@ jobs:
       
           CMDS_JSON=$(
             printf '%s\n' \
-              "bash -lc 'echo ==== preflight diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; sudo -u ubuntu -H which pm2 || true; sudo -u ubuntu -H pm2 -v || true'" \
+              "bash -lc 'echo ==== preflight diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; echo ==== ubuntu user node/npm ====; sudo -u ubuntu bash -lc \"node -v; npm -v\" || true; sudo -u ubuntu -H which pm2 || true; sudo -u ubuntu -H pm2 -v || true'" \
               "aws s3 cp s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh /tmp/deploy-nest.sh" \
               "chmod +x /tmp/deploy-nest.sh" \
-              "sed -i -E 's/^[[:space:]]*set[[:space:]]+-x/# set -x disabled by CI/g' /tmp/deploy-nest.sh || true" \
-              "sed -i -E '0,/get-secret-value/{ s|(aws secretsmanager get-secret-value[^\\n]*)|set +x; \\1; set -x| }' /tmp/deploy-nest.sh || true" \
+              "bash -lc 'command -v unzip >/dev/null && command -v jq >/dev/null || (apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y unzip jq)'" \
               "bash -lc 'command -v pm2 >/dev/null 2>&1 || npm i -g pm2'" \
-              "bash -lc '/tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\"'" \
+              "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\"'" \
             | jq -R . | jq -s '{commands: .}'
           )
       
@@ -160,7 +159,6 @@ jobs:
       
           echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
           echo "Sent command: $COMMAND_ID"
-        
 
       - name: Wait and dump SSM output
         shell: bash
