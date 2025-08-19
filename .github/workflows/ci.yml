@@ -300,3 +300,4 @@ jobs:
         run: |
           echo "Deployment completed."
           echo "Application is accessible at http://${{ env.EC2_PUBLIC_IP }}:${{ inputs.application-port }}/"
+#
