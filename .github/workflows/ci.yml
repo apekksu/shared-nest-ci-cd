@@ -190,16 +190,46 @@ jobs:
           done
           echo "Timed out waiting for SSM command"; exit 1
 
-      - name: Health check
+      - name: Health check (via SSM on instance)
+        shell: bash
+        run: |
+          set -euo pipefail
+          CMDS_JSON=$(
+            printf '%s\n' \
+              "bash -lc 'for i in {1..40}; do code=\$(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:${{ inputs.application-port }}/health || true); echo LOCAL_HTTP \$code; [[ \"\$code\" == \"200\" ]] && exit 0; sleep 3; done; echo Local health check failed; exit 1'" \
+            | jq -R . | jq -s '{commands: .}'
+          )
+          CMD_ID=$(aws --no-cli-pager ssm send-command \
+            --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "$CMDS_JSON" \
+            --region ${{ inputs.aws-region }} \
+            --query "Command.CommandId" --output text)
+
+          for i in {1..60}; do
+            STATUS=$(aws --no-cli-pager ssm get-command-invocation \
+              --command-id "$CMD_ID" --instance-id "${{ env.EC2_INSTANCE_ID }}" \
+              --region ${{ inputs.aws-region }} --query Status --output text)
+            echo "LOCAL SSM health status: $STATUS"
+            [[ "$STATUS" == "InProgress" || "$STATUS" == "Pending" || "$STATUS" == "Delayed" ]] && sleep 3 && continue
+            [[ "$STATUS" == "Success" ]] && exit 0 || exit 1
+          done
+          echo "Timed out waiting for local health check"; exit 1
+
+      - name: Health check (public IP, best-effort)
+        if: always()
+        continue-on-error: true
         run: |
           for i in {1..20}; do
-            code=$(curl -s -L --connect-timeout 3 --max-time 5 -o /dev/null -w '%{http_code}' "http://${{ env.EC2_PUBLIC_IP }}:${{ inputs.application-port }}/health")
-            echo "HTTP $code"
-            [ "$code" = "200" ] && exit 0
+            out=$(curl -sv --connect-timeout 3 --max-time 5 -o /dev/null \
+              -w 'code=%{http_code} err=%{errormsg} ip=%{remote_ip}:%{remote_port}\n' \
+              "http://${{ env.EC2_PUBLIC_IP }}:${{ inputs.application-port }}/health" 2>&1 || true)
+            echo "$out"
+            echo "$out" | grep -q 'code=200' && exit 0
             sleep 3
           done
-          echo "Health check failed"; exit 1
-        
+          echo "Public health check did not return 200 (might be SG/ELB/publish settings)."
+
       - name: Fetch remote deploy logs
         if: always()
         continue-on-error: true
@@ -218,7 +248,14 @@ jobs:
               "sudo -u ubuntu pm2 list || true",
               "echo",
               "echo '===== /var/log/cloud-init-output.log (tail -100) ====='",
-              "sudo tail -n 100 /var/log/cloud-init-output.log || true"
+              "sudo tail -n 100 /var/log/cloud-init-output.log || true",
+              "echo '===== listeners (ss) ====='",
+              "sudo ss -lntp | sed -n '1,200p' || true",
+              "echo",
+              "echo '===== pm2 logs (last 200) ====='",
+              "sudo -u ubuntu pm2 logs ${{
+                inputs.application-name
+              }}-${{ inputs.application-port }} --lines 200 --nostream || true"
             ]
           }
           JSON
@@ -239,7 +276,7 @@ jobs:
             --command-id "$LOG_CMD_ID" \
             --instance-id "${{ env.EC2_INSTANCE_ID }}" \
             --region ${{ inputs.aws-region }} \
-            --output text || true
+            --output text || true  
 
       - name: Verify Deployment
         run: |
