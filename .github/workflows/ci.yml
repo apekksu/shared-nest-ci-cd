@@ -208,35 +208,26 @@ jobs:
                 for i in {1..40}; do
                   code=\$(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:\$port\"\$hp\" || true)
                   echo LOCAL_HTTP \$code
-      
+
+                  lsn_ok=1; ss -H -lntp 2>/dev/null | grep -q \":\$port \" || lsn_ok=0
+
+                  # require either HTTP 2xx/3xx OR an actual listener
                   case \"\$code\" in 2*|3*) exit 0;; esac
-      
-                  pm2_ok=1
-                  sudo -u ubuntu pm2 jlist 2>/dev/null \
-                    | jq -e \".[] | select(.name==\\\"\$name\\\") | .pm2_env.status==\\\"online\\\"\" >/dev/null || pm2_ok=0
-      
-                  lsn_ok=1
-                  ss -H -lntp 2>/dev/null | grep -q \":\$port \" || lsn_ok=0
-      
-                  echo \"pm2_ok=\$pm2_ok lsn_ok=\$lsn_ok\"
-                  if [[ \$pm2_ok -eq 1 || \$lsn_ok -eq 1 ]]; then
-                    echo \"Treating as healthy (HTTP \$code, pm2_ok=\$pm2_ok, lsn_ok=\$lsn_ok)\"
-                    exit 0
-                  fi
-      
+                  if [[ \$lsn_ok -eq 1 ]]; then exit 0; fi
+
                   sleep 3
                 done
                 echo Local health check failed; exit 1'" \
             | jq -R . | jq -s '{commands: .}'
           )
-      
+
           CMD_ID=$(aws --no-cli-pager ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
             --parameters "$CMDS_JSON" \
             --region ${{ inputs.aws-region }} \
             --query "Command.CommandId" --output text)
-      
+
           for i in {1..60}; do
             OUT=$(aws --no-cli-pager ssm get-command-invocation \
               --command-id "$CMD_ID" --instance-id "${{ env.EC2_INSTANCE_ID }}" \
@@ -244,18 +235,11 @@ jobs:
             STATUS=$(jq -r '.Status' <<<"$OUT")
             echo "LOCAL SSM health status: $STATUS"
             [[ "$STATUS" == "InProgress" || "$STATUS" == "Pending" || "$STATUS" == "Delayed" ]] && sleep 3 && continue
-      
-            echo "----- Health StdOut -----"
             jq -r '.StandardOutputContent' <<<"$OUT" || true
-            echo "----- Health StdErr -----"
             jq -r '.StandardErrorContent' <<<"$OUT" || true
-      
             [[ "$STATUS" == "Success" ]] && exit 0 || exit 1
           done
-      
           echo "Timed out waiting for local health check"; exit 1
-      
-    
 
       - name: Health check (public IP, best-effort)
         if: always()
