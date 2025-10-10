@@ -9,6 +9,7 @@ on:
       aws-region: { required: false, type: string, default: 'eu-central-1' }
       secret-name: { required: true, type: string }
       ec2-app-tag: { required: true, type: string }
+      ec2-name: { required: false, type: string }
       healthcheck-enabled: { required: false, type: boolean, default: false }
       healthcheck-path: { required: false, type: string, default: '/health' }
     secrets:
@@ -90,34 +91,30 @@ jobs:
           set -euo pipefail
           export AWS_PAGER=""
 
+          if [[ -n "${{ inputs.ec2-name }}" ]]; then
+            FILTERS=( "Name=tag:Name,Values=${{ inputs.ec2-name }}" "Name=instance-state-name,Values=running" )
+          else
+            FILTERS=( "Name=tag:App,Values=${{ inputs.ec2-app-tag }}" "Name=instance-state-name,Values=running" )
+          fi
+
           mapfile -t IDS < <(aws --no-cli-pager ec2 describe-instances \
-            --filters "Name=tag:App,Values=${{ inputs.ec2-app-tag }}" "Name=instance-state-name,Values=running" \
+            --filters "${FILTERS[@]}" \
             --query 'Reservations[].Instances[].InstanceId' \
             --output text | tr '\t' '\n' | sed '/^$/d')
 
           COUNT=${#IDS[@]}
           if [[ $COUNT -eq 0 ]]; then
-            echo "No running instances found for App=${{ inputs.ec2-app-tag }}"; exit 1
+            echo "No running instances matched."; exit 1
           elif [[ $COUNT -gt 1 ]]; then
-            echo "Expected exactly 1 running instance for App=${{ inputs.ec2-app-tag }}, found $COUNT:"
-            aws --no-cli-pager ec2 describe-instances \
-              --filters "Name=tag:App,Values=${{ inputs.ec2-app-tag }}" "Name=instance-state-name,Values=running" \
-              --query 'Reservations[].Instances[].{Id:InstanceId,Name:Tags[?Key==`Name`]|[0].Value,IP:PublicIpAddress,Launch:LaunchTime}' \
-              --output table
-            exit 1
+            echo "Expected exactly 1 running instance, found $COUNT."; exit 1
           fi
 
           EC2_INSTANCE_ID="${IDS[0]}"
           EC2_PUBLIC_IP=$(aws --no-cli-pager ec2 describe-instances --instance-ids "$EC2_INSTANCE_ID" \
             --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
 
-          echo "EC2 Instance ID: $EC2_INSTANCE_ID"
-          echo "EC2 Public IP: ${EC2_PUBLIC_IP:-}"
-
-          {
-            printf 'EC2_INSTANCE_ID=%s\n' "$EC2_INSTANCE_ID"
-            printf 'EC2_PUBLIC_IP=%s\n' "${EC2_PUBLIC_IP:-}"
-          } >> "$GITHUB_ENV"
+          echo "EC2_INSTANCE_ID=$EC2_INSTANCE_ID" >> "$GITHUB_ENV"
+          echo "EC2_PUBLIC_IP=${EC2_PUBLIC_IP:-}" >> "$GITHUB_ENV"
 
       - name: Preflight — verify deploy script, secret, and artifact exist
         shell: bash
