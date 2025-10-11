@@ -75,6 +75,8 @@ echo "Found package.json - will use npm start"
 
 sudo -u ubuntu bash -lc 'pm2 ping >/dev/null 2>&1 || true; pm2 startup systemd -u ubuntu --hp /home/ubuntu >/dev/null 2>&1 || true'
 
+unset NODE_OPTIONS
+
 echo "Starting application via PM2 (npm start) with APPLICATION_PORT=$APPLICATION_PORT"
 sudo -u ubuntu bash -lc \
   "export PORT=$APPLICATION_PORT APPLICATION_PORT=$APPLICATION_PORT NODE_ENV=production; \
