@@ -13,6 +13,7 @@ on:
       healthcheck-enabled:  { required: false, type: boolean, default: false }
       healthcheck-path:     { required: false, type: string,  default: '/health' }
       app-ref:              { required: false, type: string }
+      root-dir:             { required: false, type: string,  default: '.' }
     secrets:
       aws-access-key-id:     { required: true }
       aws-secret-access-key: { required: true }
@@ -60,21 +61,26 @@ jobs:
           node-version: '22.11.0'
 
       - name: Install dependencies
+        working-directory: ${{ inputs.root-dir || '.' }}
         run: npm ci
 
       - name: Build
+        working-directory: ${{ inputs.root-dir || '.' }}
         run: npm run build
 
       - name: Prune to production deps
+        working-directory: ${{ inputs.root-dir || '.' }}
         run: npm prune --omit=dev
 
       - name: Package artifact
+        working-directory: ${{ inputs.root-dir || '.' }}
         run: |
           zip -r ${{ inputs.application-name }}.zip dist package.json package-lock.json node_modules
           echo "== zip contents (head) ==" && unzip -l "${{ inputs.application-name }}.zip" | sed -n '1,200p'
           unzip -l "${{ inputs.application-name }}.zip" | awk '{print $NF}' | grep -E '^dist/(src/)?main\.js$' || echo "Entry not found (ok if framework differs)."
 
       - name: Upload artifact to S3
+        working-directory: ${{ inputs.root-dir || '.' }}
         run: aws s3 cp --only-show-errors ${{ inputs.application-name }}.zip s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/
 
       - name: Resolve target EC2
