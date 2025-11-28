@@ -73,6 +73,13 @@ if [[ ! -f "package.json" ]]; then
 fi
 echo "Found package.json - will use npm start"
 
+if [[ ! -d "node_modules" ]]; then
+  echo "node_modules not found – installing production dependencies with npm ci --omit=dev"
+  sudo -u ubuntu bash -lc "cd '/home/ubuntu/${APPLICATION_NAME}' && npm ci --omit=dev"
+else
+  echo "node_modules already present – skipping npm install"
+fi
+
 sudo -u ubuntu bash -lc 'pm2 ping >/dev/null 2>&1 || true; pm2 startup systemd -u ubuntu --hp /home/ubuntu >/dev/null 2>&1 || true'
 
 unset NODE_OPTIONS
@@ -83,6 +90,5 @@ sudo -u ubuntu bash -lc \
    pm2 delete '$PROCESS_NAME' >/dev/null 2>&1 || true; \
    pm2 start npm --name '$PROCESS_NAME' --cwd '/home/ubuntu/${APPLICATION_NAME}' -- start --update-env; \
    pm2 save"
-
 
 echo "Deployment completed successfully!"
