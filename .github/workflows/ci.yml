@@ -75,9 +75,24 @@ jobs:
       - name: Package artifact
         working-directory: ${{ inputs.root-dir || '.' }}
         run: |
-          zip -r ${{ inputs.application-name }}.zip dist package.json package-lock.json node_modules
-          echo "== zip contents (head) ==" && unzip -l "${{ inputs.application-name }}.zip" | sed -n '1,200p'
-          unzip -l "${{ inputs.application-name }}.zip" | awk '{print $NF}' | grep -E '^dist/(src/)?main\.js$' || echo "Entry not found (ok if framework differs)."
+          extra_ts=""
+          if ls tsconfig*.json >/dev/null 2>&1; then
+            extra_ts="$(ls tsconfig*.json)"
+            echo "Including tsconfig files in artifact: $extra_ts"
+          else
+            echo "No tsconfig*.json files found in $(pwd), skipping."
+          fi
+
+          zip -r ${{ inputs.application-name }}.zip \
+            dist package.json package-lock.json node_modules $extra_ts
+
+          echo "== zip contents (head) =="
+          unzip -l "${{ inputs.application-name }}.zip" | sed -n '1,200p'
+          unzip -l "${{ inputs.application-name }}.zip" \
+            | awk '{print $NF}' \
+            | grep -E '^dist/(src/)?main\.js$' \
+            || echo "Entry not found (ok if framework differs)."
+
 
       - name: Upload artifact to S3
         working-directory: ${{ inputs.root-dir || '.' }}
