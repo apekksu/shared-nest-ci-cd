@@ -3,19 +3,19 @@ name: Shared CI/CD for NestJS
 on:
   workflow_call:
     inputs:
-      s3-bucket-name:       { required: true,  type: string }
-      application-name:     { required: true,  type: string }
-      application-port:     { required: true,  type: number }
-      aws-region:           { required: false, type: string,  default: 'eu-central-1' }
-      secret-name:          { required: true,  type: string }
-      ec2-app-tag:          { required: true,  type: string }
-      ec2-name:             { required: false, type: string }
-      healthcheck-enabled:  { required: false, type: boolean, default: false }
-      healthcheck-path:     { required: false, type: string,  default: '/health' }
-      app-ref:              { required: false, type: string }
-      root-dir:             { required: false, type: string,  default: '.' }
+      s3-bucket-name: { required: true, type: string }
+      application-name: { required: true, type: string }
+      application-port: { required: true, type: number }
+      aws-region: { required: false, type: string, default: "eu-central-1" }
+      secret-name: { required: true, type: string }
+      ec2-app-tag: { required: true, type: string }
+      ec2-name: { required: false, type: string }
+      healthcheck-enabled: { required: false, type: boolean, default: false }
+      healthcheck-path: { required: false, type: string, default: "/health" }
+      app-ref: { required: false, type: string }
+      root-dir: { required: false, type: string, default: "." }
     secrets:
-      aws-access-key-id:     { required: true }
+      aws-access-key-id: { required: true }
       aws-secret-access-key: { required: true }
 
 jobs:
@@ -31,9 +31,9 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.aws-access-key-id }}
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
-          aws-region:            ${{ inputs.aws-region }}
+          aws-region: ${{ inputs.aws-region }}
 
       - name: Upload deploy script to S3
         run: aws s3 cp ./scripts/deploy-nest.sh s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh
@@ -51,14 +51,14 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.aws-access-key-id }}
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
-          aws-region:            ${{ inputs.aws-region }}
+          aws-region: ${{ inputs.aws-region }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.12.0'
+          node-version: "22.12.0"
 
       - name: Install dependencies
         working-directory: ${{ inputs.root-dir || '.' }}
@@ -66,6 +66,8 @@ jobs:
 
       - name: Build
         working-directory: ${{ inputs.root-dir || '.' }}
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: npm run build
 
       - name: Prune to production deps
@@ -92,7 +94,6 @@ jobs:
             | awk '{print $NF}' \
             | grep -E '^dist/(src/)?main\.js$' \
             || echo "Entry not found (ok if framework differs)."
-
 
       - name: Upload artifact to S3
         working-directory: ${{ inputs.root-dir || '.' }}
