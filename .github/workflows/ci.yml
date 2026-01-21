@@ -7,8 +7,7 @@ on:
       application-name: { required: true, type: string }
       application-port: { required: true, type: number }
       aws-region: { required: false, type: string, default: "eu-central-1" }
-      secret-name: { required: false, type: string, default: "" }
-      secrets: { required: false, type: string, default: "" }
+      secret-name: { required: true, type: string }
       ec2-app-tag: { required: true, type: string }
       ec2-name: { required: false, type: string }
       healthcheck-enabled: { required: false, type: boolean, default: false }
@@ -24,13 +23,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Shared Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           repository: apekksu/shared-nest-ci-cd
           ref: main
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
@@ -45,52 +44,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Application Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           ref: ${{ inputs.app-ref || github.ref_name }}
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
           aws-region: ${{ inputs.aws-region }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: "22.12.0"
 
       - name: Install dependencies
         working-directory: ${{ inputs.root-dir || '.' }}
         run: npm ci
-
-      - name: Create .env files from secrets (monorepo)
-        if: ${{ inputs.secrets != '' }}
-        working-directory: ${{ inputs.root-dir || '.' }}
-        run: |
-          echo '${{ inputs.secrets }}' | jq -c '.[]' | while read -r item; do
-            secret=$(echo "$item" | jq -r '.secret')
-            envpath=$(echo "$item" | jq -r '.path')
-            echo "Fetching secret '$secret' for path '$envpath'"
-            mkdir -p "$envpath"
-            aws secretsmanager get-secret-value --secret-id "$secret" \
-              --query SecretString --output text \
-              | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > "$envpath/.env"
-            chmod 600 "$envpath/.env"
-            echo "Created $envpath/.env from secret $secret"
-          done
-
-      - name: Create .env from single secret (legacy)
-        if: ${{ inputs.secrets == '' && inputs.secret-name != '' }}
-        working-directory: ${{ inputs.root-dir || '.' }}
-        run: |
-          echo "Fetching secret '${{ inputs.secret-name }}' for root directory"
-          aws secretsmanager get-secret-value --secret-id "${{ inputs.secret-name }}" \
-            --query SecretString --output text \
-            | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
-          chmod 600 .env
-          echo "Created .env from secret ${{ inputs.secret-name }}"
 
       - name: Build
         working-directory: ${{ inputs.root-dir || '.' }}
@@ -113,15 +85,8 @@ jobs:
             echo "No tsconfig*.json files found in $(pwd), skipping."
           fi
 
-          # Find all .env files created by secrets step
-          env_files=$(find . -name ".env" -type f 2>/dev/null || true)
-          if [[ -n "$env_files" ]]; then
-            echo "Including .env files in artifact:"
-            echo "$env_files"
-          fi
-
           zip -r ${{ inputs.application-name }}.zip \
-            dist package.json package-lock.json node_modules apps packages turbo.json $extra_ts $env_files
+            dist package.json package-lock.json node_modules apps packages turbo.json $extra_ts
 
           echo "== zip contents (head) =="
           unzip -l "${{ inputs.application-name }}.zip" | sed -n '1,200p'
@@ -155,24 +120,12 @@ jobs:
         shell: bash
         run: |
           aws s3 ls "s3://${{ inputs.s3-bucket-name }}/scripts/deploy-nest.sh" >/dev/null
+          aws secretsmanager describe-secret --secret-id "${{ inputs.secret-name }}" >/dev/null
           aws s3 ls "s3://${{ inputs.s3-bucket-name }}/${{ inputs.application-name }}/${{ inputs.application-name }}.zip" >/dev/null
-          # Validate secrets exist
-          if [[ -n '${{ inputs.secrets }}' ]]; then
-            echo '${{ inputs.secrets }}' | jq -c '.[]' | while read -r item; do
-              secret=$(echo "$item" | jq -r '.secret')
-              echo "Validating secret: $secret"
-              aws secretsmanager describe-secret --secret-id "$secret" >/dev/null
-            done
-          elif [[ -n '${{ inputs.secret-name }}' ]]; then
-            aws secretsmanager describe-secret --secret-id "${{ inputs.secret-name }}" >/dev/null
-          fi
 
       - name: Deploy via SSM
         shell: bash
         run: |
-          # Prepare secrets arg - pass JSON for multi-secret or empty for legacy (secrets already in artifact)
-          SECRETS_ARG='${{ inputs.secrets }}'
-          SECRET_NAME_ARG='${{ inputs.secret-name }}'
           CMDS_JSON=$(
             printf '%s\n' \
               "bash -lc 'echo ==== diag ====; id; whoami; uname -a; aws --version || true; node -v || true; npm -v || true; sudo -u ubuntu -H which pm2 || true; sudo -u ubuntu -H pm2 -v || true'" \
@@ -180,7 +133,7 @@ jobs:
               "chmod +x /tmp/deploy-nest.sh" \
               "bash -lc 'command -v unzip >/dev/null || (sudo apt-get update -y && sudo apt-get install -y unzip jq)'" \
               "bash -lc 'command -v pm2 >/dev/null 2>&1 || npm i -g pm2'" \
-              "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${SECRET_NAME_ARG}\" \"${SECRETS_ARG}\"'" \
+              "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\"'" \
             | jq -R . | jq -s '{commands: .}'
           )
           CID=$(aws ssm send-command \

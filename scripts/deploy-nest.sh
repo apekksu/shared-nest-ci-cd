@@ -9,8 +9,7 @@ export HOME=/home/ubuntu
 APPLICATION_NAME="$1"
 APPLICATION_PORT="$2"
 S3_BUCKET_NAME="$3"
-SECRET_NAME="${4:-}"
-SECRETS_JSON="${5:-}"
+SECRET_NAME="$4"
 
 PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 
@@ -58,32 +57,15 @@ chown -R ubuntu:ubuntu "/home/ubuntu/${APPLICATION_NAME}"
 
 echo "Fetching secrets from AWS Secrets Manager"
 set +x
-if [[ -n "$SECRETS_JSON" ]]; then
-  echo "$SECRETS_JSON" | jq -c '.[]' | while read -r item; do
-    secret=$(echo "$item" | jq -r '.secret')
-    envpath=$(echo "$item" | jq -r '.path')
-    echo "Fetching secret '$secret' for path '$envpath'"
-    mkdir -p "$envpath"
-    aws secretsmanager get-secret-value \
-      --secret-id "$secret" \
-      --query SecretString \
-      --output text \
-      | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > "$envpath/.env"
-    chmod 600 "$envpath/.env"
-    chown ubuntu:ubuntu "$envpath/.env"
-  done
-elif [[ -n "$SECRET_NAME" ]]; then
-  aws secretsmanager get-secret-value \
-    --secret-id "$SECRET_NAME" \
-    --query SecretString \
-    --output text \
-    | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
-  chmod 600 .env
-  chown ubuntu:ubuntu .env
-else
-  echo "No secrets provided - skipping .env creation (already in artifact)"
-fi
+aws secretsmanager get-secret-value \
+  --secret-id "$SECRET_NAME" \
+  --query SecretString \
+  --output text \
+  | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
 set -x
+
+chmod 600 .env
+chown ubuntu:ubuntu .env
 
 if [[ ! -f "package.json" ]]; then
   echo "ERROR: package.json not found. Cannot use npm start."
