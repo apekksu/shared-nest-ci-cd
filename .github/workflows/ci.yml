@@ -113,8 +113,15 @@ jobs:
             echo "No tsconfig*.json files found in $(pwd), skipping."
           fi
 
+          # Find all .env files created by secrets step
+          env_files=$(find . -name ".env" -type f 2>/dev/null || true)
+          if [[ -n "$env_files" ]]; then
+            echo "Including .env files in artifact:"
+            echo "$env_files"
+          fi
+
           zip -r ${{ inputs.application-name }}.zip \
-            dist package.json package-lock.json node_modules apps packages turbo.json $extra_ts
+            dist package.json package-lock.json node_modules apps packages turbo.json $extra_ts $env_files
 
           echo "== zip contents (head) =="
           unzip -l "${{ inputs.application-name }}.zip" | sed -n '1,200p'
