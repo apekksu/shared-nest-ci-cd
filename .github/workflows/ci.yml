@@ -42,6 +42,9 @@ jobs:
     if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]') }}
     needs: upload-shared-files
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-${{ github.repository }}-${{ inputs.application-name }}-${{ inputs.application-port }}
+      cancel-in-progress: true
     steps:
       - name: Checkout Application Repository
         uses: actions/checkout@v4
@@ -133,7 +136,7 @@ jobs:
               "chmod +x /tmp/deploy-nest.sh" \
               "bash -lc 'command -v unzip >/dev/null || (sudo apt-get update -y && sudo apt-get install -y unzip jq)'" \
               "bash -lc 'command -v pm2 >/dev/null 2>&1 || npm i -g pm2'" \
-              "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\"'" \
+              "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\" \"${{ inputs.healthcheck-path }}\" \"${{ inputs.healthcheck-enabled }}\"'" \
             | jq -R . | jq -s '{commands: .}'
           )
           CID=$(aws ssm send-command \
@@ -162,7 +165,6 @@ jobs:
 
       - name: Health (local via SSM)
         if: ${{ inputs.healthcheck-enabled }}
-        continue-on-error: true
         shell: bash
         run: |
           CMDS_JSON=$(printf '%s\n' "bash -lc 'set -e
@@ -171,14 +173,18 @@ jobs:
             for i in {1..40}; do
               code=\$(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:\$port\"\$hp\" || true)
               echo LOCAL_HTTP \$code
-              ss -H -lntp | grep -q \":\$port \" && exit 0
               case \"\$code\" in 2*|3*) exit 0;; esac
               sleep 3
             done
             exit 1'" | jq -R . | jq -s '{commands: .}')
           CID=$(aws ssm send-command --instance-ids "${{ env.EC2_INSTANCE_ID }}" --document-name "AWS-RunShellScript" --parameters "$CMDS_JSON" --region ${{ inputs.aws-region }} --query "Command.CommandId" --output text)
           aws ssm wait command-executed --command-id "$CID" --instance-id "${{ env.EC2_INSTANCE_ID }}" --region ${{ inputs.aws-region }} || true
-          aws ssm get-command-invocation --command-id "$CID" --instance-id "${{ env.EC2_INSTANCE_ID }}" --region ${{ inputs.aws-region }} --output text || true
+          OUT=$(aws ssm get-command-invocation --command-id "$CID" --instance-id "${{ env.EC2_INSTANCE_ID }}" --region ${{ inputs.aws-region }} --output json)
+          ST=$(jq -r '.Status' <<<"$OUT")
+          echo "Local health status: $ST"
+          echo "----- STDOUT -----"; jq -r '.StandardOutputContent' <<<"$OUT" || true
+          echo "----- STDERR -----"; jq -r '.StandardErrorContent' <<<"$OUT" || true
+          [[ "$ST" == "Success" ]]
 
       - name: Health (public, best-effort)
         if: always()
