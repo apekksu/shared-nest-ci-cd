@@ -11,6 +11,7 @@ S3_BUCKET_NAME="$3"
 SECRET_NAME="$4"
 HEALTHCHECK_PATH="${5:-/}"
 HEALTHCHECK_ENABLED="${6:-false}"
+CANARY_COMMAND="${7:-}"
 
 PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 APP_DIR="/home/ubuntu/${APPLICATION_NAME}"
@@ -178,8 +179,13 @@ unset NODE_OPTIONS
 
 if [[ "$HEALTHCHECK_ENABLED" == "true" ]]; then
   echo "Starting canary boot on localhost port $CANARY_PORT before replacing the live process..."
+  if [[ -z "$CANARY_COMMAND" ]]; then
+    CANARY_COMMAND="npm start"
+  fi
+  echo "Canary command: $CANARY_COMMAND"
+
   sudo -u ubuntu bash -lc \
-    "cd '$RELEASE_DIR' && export PORT='$CANARY_PORT' APPLICATION_PORT='$CANARY_PORT' NODE_ENV=production; npm start" \
+    "cd '$RELEASE_DIR' && export PORT='$CANARY_PORT' APPLICATION_PORT='$CANARY_PORT' NODE_ENV=production; $CANARY_COMMAND" \
     > "$CANARY_LOG" 2>&1 &
   CANARY_PID=$!
 
