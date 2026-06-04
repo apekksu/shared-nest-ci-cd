@@ -12,6 +12,7 @@ on:
       ec2-name: { required: false, type: string }
       healthcheck-enabled: { required: false, type: boolean, default: false }
       healthcheck-path: { required: false, type: string, default: "/health" }
+      canary-command: { required: false, type: string, default: "" }
       app-ref: { required: false, type: string }
       root-dir: { required: false, type: string, default: "." }
     secrets:
@@ -136,7 +137,7 @@ jobs:
               "chmod +x /tmp/deploy-nest.sh" \
               "bash -lc 'command -v unzip >/dev/null || (sudo apt-get update -y && sudo apt-get install -y unzip jq)'" \
               "bash -lc 'command -v pm2 >/dev/null 2>&1 || npm i -g pm2'" \
-              "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\" \"${{ inputs.healthcheck-path }}\" \"${{ inputs.healthcheck-enabled }}\"'" \
+              "bash -lc 'NO_TEE=1 /tmp/deploy-nest.sh \"${{ inputs.application-name }}\" \"${{ inputs.application-port }}\" \"${{ inputs.s3-bucket-name }}\" \"${{ inputs.secret-name }}\" \"${{ inputs.healthcheck-path }}\" \"${{ inputs.healthcheck-enabled }}\" \"${{ inputs.canary-command }}\"'" \
             | jq -R . | jq -s '{commands: .}'
           )
           CID=$(aws ssm send-command \
