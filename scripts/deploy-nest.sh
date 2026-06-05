@@ -23,12 +23,77 @@ CANARY_PORT=$((APPLICATION_PORT + 1000))
 CANARY_LOG="/tmp/${APPLICATION_NAME}-${RELEASE_ID}-canary.log"
 CANARY_PID=""
 
-cleanup() {
-  local rc=$?
-  if [[ -n "${CANARY_PID:-}" ]] && kill -0 "$CANARY_PID" >/dev/null 2>&1; then
-    kill "$CANARY_PID" >/dev/null 2>&1 || true
+kill_pid_or_group() {
+  local pid="$1"
+  local pgid
+
+  pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+  if [[ -n "$pgid" && "$pgid" != "1" ]]; then
+    kill -- "-$pgid" >/dev/null 2>&1 || true
+  else
+    kill "$pid" >/dev/null 2>&1 || true
+  fi
+}
+
+kill_canary() {
+  if [[ -z "${CANARY_PID:-}" ]]; then
+    return 0
+  fi
+
+  if kill -0 "$CANARY_PID" >/dev/null 2>&1; then
+    kill_pid_or_group "$CANARY_PID"
+    for _ in {1..20}; do
+      kill -0 "$CANARY_PID" >/dev/null 2>&1 || break
+      sleep 0.5
+    done
+    if kill -0 "$CANARY_PID" >/dev/null 2>&1; then
+      local pgid
+      pgid="$(ps -o pgid= -p "$CANARY_PID" 2>/dev/null | tr -d ' ' || true)"
+      if [[ -n "$pgid" && "$pgid" != "1" ]]; then
+        kill -KILL -- "-$pgid" >/dev/null 2>&1 || true
+      else
+        kill -KILL "$CANARY_PID" >/dev/null 2>&1 || true
+      fi
+    fi
     wait "$CANARY_PID" >/dev/null 2>&1 || true
   fi
+
+  CANARY_PID=""
+}
+
+kill_port_listeners() {
+  local port="$1"
+  local pids=()
+
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] && pids+=("$pid")
+  done < <(
+    sudo ss -H -lntp 2>/dev/null \
+      | awk -v port=":$port" '$4 ~ port "$" {print $0}' \
+      | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' \
+      | sort -u
+  )
+
+  for pid in "${pids[@]}"; do
+    echo "Stopping stale listener on canary port $port: pid $pid ($(ps -p "$pid" -o comm= 2>/dev/null || true))"
+    kill_pid_or_group "$pid"
+  done
+}
+
+trim_logs() {
+  local log_dir="/home/ubuntu/.pm2/logs"
+
+  if [[ -d "$log_dir" ]]; then
+    find "$log_dir" -maxdepth 1 -type f -name "${PROCESS_NAME}-*.log" -size +200M -print \
+      -exec sh -c 'echo "Truncating oversized PM2 log: $1"; : > "$1"' _ {} \; || true
+  fi
+
+  find /tmp -maxdepth 1 -type f -name "${APPLICATION_NAME}-*-canary.log" -mtime +1 -print -delete || true
+}
+
+cleanup() {
+  local rc=$?
+  kill_canary
   if [[ -d "$RELEASE_DIR" ]]; then
     rm -rf "$RELEASE_DIR" || true
   fi
@@ -126,6 +191,11 @@ if ! flock -w 1200 9; then
 fi
 echo "Deployment lock acquired."
 
+trim_logs
+if [[ "$HEALTHCHECK_ENABLED" == "true" ]]; then
+  kill_port_listeners "$CANARY_PORT"
+fi
+
 rm -rf "$RELEASE_DIR"
 mkdir "$RELEASE_DIR"
 cd "$RELEASE_DIR"
@@ -184,7 +254,7 @@ if [[ "$HEALTHCHECK_ENABLED" == "true" ]]; then
   fi
   echo "Canary command: $CANARY_COMMAND"
 
-  sudo -u ubuntu bash -lc \
+  setsid sudo -u ubuntu bash -lc \
     "cd '$RELEASE_DIR' && export PORT='$CANARY_PORT' APPLICATION_PORT='$CANARY_PORT' NODE_ENV=production; $CANARY_COMMAND" \
     > "$CANARY_LOG" 2>&1 &
   CANARY_PID=$!
@@ -200,9 +270,7 @@ if [[ "$HEALTHCHECK_ENABLED" == "true" ]]; then
   fi
 
   echo "Canary boot is healthy."
-  kill "$CANARY_PID" >/dev/null 2>&1 || true
-  wait "$CANARY_PID" >/dev/null 2>&1 || true
-  CANARY_PID=""
+  kill_canary
 fi
 
 echo "Switching release into place."
