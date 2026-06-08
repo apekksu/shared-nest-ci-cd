@@ -68,6 +68,15 @@ jobs:
         working-directory: ${{ inputs.root-dir || '.' }}
         run: npm ci
 
+      - name: Materialize build-time env
+        working-directory: ${{ inputs.root-dir || '.' }}
+        run: |
+          aws secretsmanager get-secret-value \
+            --secret-id "${{ inputs.secret-name }}" \
+            --query SecretString \
+            --output text \
+            | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
+
       - name: Build
         working-directory: ${{ inputs.root-dir || '.' }}
         env:
