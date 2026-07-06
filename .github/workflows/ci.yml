@@ -15,6 +15,7 @@ on:
       canary-command: { required: false, type: string, default: "" }
       app-ref: { required: false, type: string }
       root-dir: { required: false, type: string, default: "." }
+      build-command: { required: false, type: string, default: "npm run build" }
     secrets:
       aws-access-key-id: { required: true }
       aws-secret-access-key: { required: true }
@@ -81,7 +82,7 @@ jobs:
         working-directory: ${{ inputs.root-dir || '.' }}
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
-        run: npm run build
+        run: ${{ inputs.build-command }}
 
       - name: Prune to production deps
         working-directory: ${{ inputs.root-dir || '.' }}
