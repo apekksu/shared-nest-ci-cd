@@ -12,6 +12,7 @@ SECRET_NAME="$4"
 HEALTHCHECK_PATH="${5:-/}"
 HEALTHCHECK_ENABLED="${6:-false}"
 CANARY_COMMAND="${7:-}"
+WORKSPACE="${8:-}"
 
 PROCESS_NAME="${APPLICATION_NAME}-${APPLICATION_PORT}"
 APP_DIR="/home/ubuntu/${APPLICATION_NAME}"
@@ -229,6 +230,12 @@ aws secretsmanager get-secret-value \
 
 chmod 600 .env
 chown ubuntu:ubuntu .env
+
+if [[ -n "$WORKSPACE" ]]; then
+  cp .env "apps/$WORKSPACE/.env"
+  chmod 600 "apps/$WORKSPACE/.env"
+  chown ubuntu:ubuntu "apps/$WORKSPACE/.env"
+fi
 
 if [[ ! -f "package.json" ]]; then
   echo "ERROR: package.json not found. Cannot use npm start."
