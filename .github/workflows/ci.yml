@@ -102,7 +102,13 @@ jobs:
           fi
 
           WS="${{ inputs.workspace }}"
-          excludes=( -x "packages/*/node_modules/*" -x "apps/*/.turbo/*" -x "packages/*/.turbo/*" )
+          # packages/*/node_modules stay IN the artifact: npm nests a local
+          # node_modules under a package when its dependency version differs
+          # from the root-hoisted one (e.g. a shared package on zod v4 while
+          # the root hoists v3). Excluding them makes the package resolve the
+          # wrong version at runtime. Only other apps' node_modules are
+          # excluded.
+          excludes=( -x "apps/*/.turbo/*" -x "packages/*/.turbo/*" )
           for d in apps/*/; do
             d="${d%/}"
             if [ -z "$WS" ] || [ "$d" != "apps/$WS" ]; then
@@ -119,8 +125,8 @@ jobs:
           echo "== zip size =="
           du -h "$zip_name"
           echo "== nested workspace node_modules check =="
-          if unzip -l "$zip_name" | awk '{print $NF}' | grep -E '^(apps|packages)/[^/]+/node_modules/' | grep -v "^apps/${WS:-__none__}/node_modules/"; then
-            echo "ERROR: artifact contains nested workspace node_modules outside the target workspace."
+          if unzip -l "$zip_name" | awk '{print $NF}' | grep -E '^apps/[^/]+/node_modules/' | grep -v "^apps/${WS:-__none__}/node_modules/"; then
+            echo "ERROR: artifact contains another app's node_modules."
             exit 1
           fi
           unzip -l "$zip_name" \

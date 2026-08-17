@@ -143,10 +143,17 @@ stop_pm2() {
 
 start_pm2() {
   local cwd="$1"
+  # When a workspace is given, start that workspace directly instead of
+  # relying on the repo root's `start` script (which may point at a
+  # different workspace in a multi-app monorepo).
+  local start_args="start"
+  if [[ -n "$WORKSPACE" ]]; then
+    start_args="start --workspace=$WORKSPACE"
+  fi
   sudo -u ubuntu bash -lc \
     "export PORT='$APPLICATION_PORT' APPLICATION_PORT='$APPLICATION_PORT' NODE_ENV=production; \
      pm2 delete '$PROCESS_NAME' >/dev/null 2>&1 || true; \
-     pm2 start npm --name '$PROCESS_NAME' --cwd '$cwd' -- start --update-env; \
+     pm2 start npm --name '$PROCESS_NAME' --cwd '$cwd' -- $start_args --update-env; \
      pm2 save"
 }
 
@@ -257,7 +264,11 @@ unset NODE_OPTIONS
 if [[ "$HEALTHCHECK_ENABLED" == "true" ]]; then
   echo "Starting canary boot on localhost port $CANARY_PORT before replacing the live process..."
   if [[ -z "$CANARY_COMMAND" ]]; then
-    CANARY_COMMAND="npm start"
+    if [[ -n "$WORKSPACE" ]]; then
+      CANARY_COMMAND="npm start --workspace=$WORKSPACE"
+    else
+      CANARY_COMMAND="npm start"
+    fi
   fi
   echo "Canary command: $CANARY_COMMAND"
 
